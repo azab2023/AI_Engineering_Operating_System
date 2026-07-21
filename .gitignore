@@ -1,0 +1,68 @@
+# ==========================================================================
+# AEOS .gitignore
+# ==========================================================================
+
+# --- Secrets & credentials ---
+*.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+**/credentials.json
+**/*_service_account.json
+
+# --- Logs & runtime output ---
+logs/
+*.log
+
+# --- Agent runtime/state (should never be committed) ---
+agents/**/state/
+agents/**/cache/
+agents/**/*.session
+**/.aider*
+**/.claude-code-cache/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- Node / JS (in case tooling is added later) ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editor/IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Build/dist artifacts ---
+dist/
+build/
+*.egg
+*.whl
+
+# --- Local overrides ---
+configs/environments/local.*
+*.local.yaml
+*.local.json
+
+# --- Keep placeholder files tracked ---
+!.gitkeep
