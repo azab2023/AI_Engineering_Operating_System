@@ -1,0 +1,90 @@
+version: 1.0
+
+prompts:
+
+  architecture_review:
+    category: architecture
+    purpose: Review system architecture
+    agents:
+      - claude_code
+      - codex
+
+  code_generation:
+    category: coding
+    purpose: Generate production code
+    agents:
+      - codex
+      - aider
+
+  debugging:
+    category: debugging
+    purpose: Analyze and fix bugs
+    agents:
+      - codex
+      - aider
+
+  documentation:
+    category: documentation
+    purpose: Generate technical documentation
+    agents:
+      - claude_code
+      - geminiversion: 1.0
+
+system: AEOS Prompt Registry
+
+prompts:
+
+  architecture_review:
+    category: architecture
+    purpose: Review and improve system architecture
+    agents:
+      - claude_code
+      - codex
+    priority: high
+
+  code_generation:
+    category: coding
+    purpose: Generate production quality code
+    agents:
+      - codex
+      - aider
+    priority: high
+
+  code_refactoring:
+    category: coding
+    purpose: Safely refactor existing code
+    agents:
+      - aider
+      - codex
+    priority: medium
+
+  debugging:
+    category: debugging
+    purpose: Analyze errors and provide fixes
+    agents:
+      - codex
+      - aider
+    priority: high
+
+  testing:
+    category: testing
+    purpose: Create and validate automated tests
+    agents:
+      - codex
+    priority: high
+
+  documentation:
+    category: documentation
+    purpose: Generate technical documentation
+    agents:
+      - claude_code
+      - gemini
+    priority: medium
+
+  automation_design:
+    category: automation
+    purpose: Design workflows and automation systems
+    agents:
+      - claude_code
+      - gemini
+    priority: high
