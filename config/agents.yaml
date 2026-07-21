@@ -1,0 +1,17 @@
+agents:
+
+  claude_code:
+    role: architecture_and_complex_reasoning
+    priority: high
+
+  codex:
+    role: software_engineering
+    priority: high
+
+  aider:
+    role: code_editing_and_refactoring
+    priority: medium
+
+  gemini:
+    role: analysis_and_multimodal_tasks
+    priority: medium

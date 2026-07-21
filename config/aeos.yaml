@@ -1,0 +1,44 @@
+system:
+  name: AI Engineering Operating System
+  short_name: AEOS
+  version: 1.0.0
+  environment: development
+
+architecture:
+  methodology:
+    - architecture_first
+    - phase_based_development
+    - modular_design
+    - automation_driven
+
+development:
+  languages:
+    primary:
+      - python
+      - typescript
+    documentation: markdown
+
+git:
+  workflow:
+    main_branch: main
+    development_branches: true
+    phase_branches: true
+
+  rules:
+    direct_main_commit: false
+    require_review: true
+    require_tests: true
+
+agents:
+  enabled:
+    - claude_code
+    - openai_codex
+    - aider
+    - gemini
+
+quality:
+  requirements:
+    testing: mandatory
+    documentation: mandatory
+    logging: mandatory
+    validation: mandatory
