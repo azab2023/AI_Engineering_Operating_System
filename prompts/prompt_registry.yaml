@@ -1,35 +1,5 @@
 version: 1.0
 
-prompts:
-
-  architecture_review:
-    category: architecture
-    purpose: Review system architecture
-    agents:
-      - claude_code
-      - codex
-
-  code_generation:
-    category: coding
-    purpose: Generate production code
-    agents:
-      - codex
-      - aider
-
-  debugging:
-    category: debugging
-    purpose: Analyze and fix bugs
-    agents:
-      - codex
-      - aider
-
-  documentation:
-    category: documentation
-    purpose: Generate technical documentation
-    agents:
-      - claude_code
-      - geminiversion: 1.0
-
 system: AEOS Prompt Registry
 
 prompts:
