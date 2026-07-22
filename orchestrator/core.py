@@ -18,16 +18,26 @@ layer). An agent is eligible for a task if:
     2. it supports the task's task_type, and
     3. it has every capability listed in task.required_capabilities.
 
-Among eligible agents, the first one registered (registry insertion
-order) is selected. This is intentionally simple; a scoring/priority
-based strategy is a natural Phase-05+ extension and is not implemented
-here to avoid speculative complexity.
+Among eligible agents, the one with the highest AgentPriority (high >
+medium > low) is selected. Ties within the same priority are broken by
+registry insertion order (stable sort), which was the sole ordering rule
+prior to the Phase-04 patch release. A further scoring strategy beyond
+priority is a natural Phase-05+ extension and is not implemented here to
+avoid speculative complexity.
+
+State transitions (route/mark_awaiting_approval/approve) are guarded:
+each method only accepts an execution in the specific prior state it is
+meant to follow, and raises InvalidStateTransitionError otherwise. This
+was added in the Phase-04 patch release to close a gap where, e.g.,
+approve() could previously be called on an execution that had never been
+routed.
 """
 
 from __future__ import annotations
 
 from orchestrator.exceptions import (
     AgentUnavailableError,
+    InvalidStateTransitionError,
     NoSuitableAgentError,
     UnknownExecutionError,
 )
@@ -35,6 +45,7 @@ from orchestrator.logging_setup import get_logger
 from orchestrator.models import (
     Agent,
     AgentExecution,
+    AgentPriority,
     AgentStatus,
     AgentTask,
     ExecutionState,
@@ -42,6 +53,14 @@ from orchestrator.models import (
 from orchestrator.registry import AgentRegistry
 
 logger = get_logger("core")
+
+# Lower rank = higher priority. Used to sort eligible agents deterministically;
+# ties (equal priority) preserve registry insertion order via a stable sort.
+_PRIORITY_RANK: dict[AgentPriority, int] = {
+    AgentPriority.HIGH: 0,
+    AgentPriority.MEDIUM: 1,
+    AgentPriority.LOW: 2,
+}
 
 
 class Orchestrator:
@@ -93,12 +112,18 @@ class Orchestrator:
                 raise AgentUnavailableError(inactive.name, inactive.status.value)
             raise NoSuitableAgentError(task.task_type, list(task.required_capabilities))
 
-        selected = active_candidates[0]
+        # Stable sort: agents are ordered by priority (high first); agents
+        # sharing the same priority keep their original registry order.
+        ranked_candidates = sorted(
+            active_candidates, key=lambda agent: _PRIORITY_RANK[agent.priority]
+        )
+        selected = ranked_candidates[0]
         logger.info(
-            "Agent selected: task_type=%s selected_agent=%s candidates=%s",
+            "Agent selected: task_type=%s selected_agent=%s (priority=%s) candidates=%s",
             task.task_type,
             selected.name,
-            [a.name for a in active_candidates],
+            selected.priority.value,
+            [(a.name, a.priority.value) for a in ranked_candidates],
         )
         return selected
 
@@ -110,6 +135,14 @@ class Orchestrator:
         """
         if execution.execution_id not in self._executions:
             raise UnknownExecutionError(execution.execution_id)
+
+        if execution.state != ExecutionState.PENDING:
+            raise InvalidStateTransitionError(
+                execution.execution_id,
+                action="route",
+                expected_state=ExecutionState.PENDING.value,
+                actual_state=execution.state.value,
+            )
 
         try:
             agent = self.select_agent(execution.task)
@@ -142,8 +175,18 @@ class Orchestrator:
         return execution
 
     def mark_awaiting_approval(self, execution_id: str, result: str) -> AgentExecution:
-        """Mark a running execution as complete pending human approval."""
+        """Mark a running execution as complete pending human approval.
+
+        Only valid from RUNNING; raises InvalidStateTransitionError otherwise.
+        """
         execution = self.track(execution_id)
+        if execution.state != ExecutionState.RUNNING:
+            raise InvalidStateTransitionError(
+                execution_id,
+                action="mark_awaiting_approval",
+                expected_state=ExecutionState.RUNNING.value,
+                actual_state=execution.state.value,
+            )
         execution.result = result
         execution.state = ExecutionState.AWAITING_APPROVAL
         execution.touch()
@@ -151,8 +194,21 @@ class Orchestrator:
         return execution
 
     def approve(self, execution_id: str) -> AgentExecution:
-        """Human approval step: AWAITING_APPROVAL -> COMPLETED."""
+        """Human approval step: AWAITING_APPROVAL -> COMPLETED.
+
+        Only valid from AWAITING_APPROVAL; raises InvalidStateTransitionError
+        otherwise. This is the sole path to COMPLETED, so an execution can
+        only be completed after having actually been routed to an agent and
+        produced a result awaiting review.
+        """
         execution = self.track(execution_id)
+        if execution.state != ExecutionState.AWAITING_APPROVAL:
+            raise InvalidStateTransitionError(
+                execution_id,
+                action="approve",
+                expected_state=ExecutionState.AWAITING_APPROVAL.value,
+                actual_state=execution.state.value,
+            )
         execution.state = ExecutionState.COMPLETED
         execution.touch()
         logger.info("Execution approved and completed: execution_id=%s", execution_id)

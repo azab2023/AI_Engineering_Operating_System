@@ -1,6 +1,7 @@
 # ADR-0002: Agent Orchestration Layer (Phase-04)
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by Phase-04 Patch Release — see Amendment
+  section below)
 - **Date:** Phase-04
 - **Deciders:** Lead AI Systems Architect
 
@@ -131,6 +132,49 @@ should reuse this rather than configuring `logging` independently.
   that should be resolved once Phase-02's config-schema work happens.
   Execution state is in-memory only and is lost on process restart.
 
+## Amendment: Phase-04 Patch Release
+
+A post-implementation review of Phase-04 found that decisions 4 and 6
+above did not hold up under direct execution: `select_agent()` ordered
+candidates by registry file order only (no use of agent priority), and
+none of `route()` / `mark_awaiting_approval()` / `approve()` checked an
+execution's current state before transitioning it — meaning `approve()`
+could be called directly on a freshly-submitted (`PENDING`) execution,
+reaching `COMPLETED` with `assigned_agent = None` and no result ever
+having been produced or reviewed. This made the "human-in-the-loop kept
+structural" claim in decision 6 inaccurate as originally implemented.
+This patch release addresses exactly those two gaps, plus one related
+cleanup, without altering the design decisions above:
+
+1. **State-machine guards added.** `route()` now requires the execution
+   to be `PENDING`, `mark_awaiting_approval()` requires `RUNNING`, and
+   `approve()` requires `AWAITING_APPROVAL`. Any other current state
+   raises `InvalidStateTransitionError` and leaves the execution's state
+   unchanged. `COMPLETED` is now only reachable via the full
+   `PENDING → RUNNING → AWAITING_APPROVAL → COMPLETED` path, making
+   decision 6's human-review guarantee actually true rather than merely
+   intended.
+
+2. **Agent `priority` used as the primary selection key.** `Agent` gained
+   a required `priority` field (`high` / `medium` / `low`, mirroring the
+   scale already used in `config/agents.yaml`), populated in
+   `config/agent_registry.yaml` for all four agents. `select_agent()`
+   now selects the highest-priority eligible agent; agents sharing the
+   same priority still fall back to registry (insertion) order, which
+   was the entirety of the pre-patch rule. This is additive to decision
+   4, not a replacement of its deterministic, non-LLM-based approach.
+
+3. **`AgentTask.priority` removed.** It was defined but never read
+   anywhere in the codebase. Giving it real behavior would require some
+   form of task queueing/ordering, which is a design change beyond a
+   patch release's scope; since it had no consumer, removing it was the
+   minimal-change option. (Not to be confused with the new `Agent.priority`
+   in point 2 above — task priority and agent priority are different,
+   unrelated concepts, and only the latter exists post-patch.)
+
+No files outside `orchestrator/`, `config/agent_registry.yaml`, and this
+ADR were changed as part of the patch.
+
 ## Follow-up
 
 - Resolve `config/` vs `configs/` (still open from ADR-0001/prior
@@ -145,3 +189,6 @@ should reuse this rather than configuring `logging` independently.
   that phase introduces.
 - Agent adapters (actual invocation of each agent) are required before
   `route()`'s `RUNNING` state means anything beyond "assigned."
+- (Patch release follow-up) Consider whether a scoring strategy beyond
+  priority-then-registry-order is needed once agent count grows — not
+  required for Phase-05 as currently scoped.

@@ -14,6 +14,11 @@
 #   supported_tasks   - task_type strings the orchestrator can route to this agent
 #   config_reference  - path to this agent's dedicated config folder
 #   status            - active | inactive | planned
+#   priority          - high | medium | low; used by the orchestrator to
+#                        break ties deterministically when more than one
+#                        active agent is eligible for the same task.
+#                        Mirrors the priority already assigned per agent
+#                        in config/agents.yaml.
 
 agents:
 
@@ -34,6 +39,7 @@ agents:
       - automation_design
     config_reference: agents/claude-code/config
     status: active
+    priority: high
 
   - name: codex
     provider: openai
@@ -56,6 +62,7 @@ agents:
       - architecture_review
     config_reference: agents/openai-codex/config
     status: active
+    priority: high
 
   - name: aider
     provider: openai
@@ -72,6 +79,7 @@ agents:
       - debugging
     config_reference: agents/aider/config
     status: active
+    priority: medium
 
   - name: gemini
     provider: google
@@ -90,3 +98,4 @@ agents:
       - research
     config_reference: agents/gemini/config
     status: active
+    priority: medium

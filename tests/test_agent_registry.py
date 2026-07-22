@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from orchestrator.exceptions import AgentRegistryError
-from orchestrator.models import AgentStatus
+from orchestrator.models import AgentPriority, AgentStatus
 from orchestrator.registry import AgentRegistry, DEFAULT_REGISTRY_PATH
 
 
@@ -39,6 +39,7 @@ def test_real_registry_agents_have_required_fields():
         assert agent.supported_tasks
         assert agent.config_reference
         assert isinstance(agent.status, AgentStatus)
+        assert isinstance(agent.priority, AgentPriority)
 
 
 def test_real_registry_all_agents_active_by_default():
@@ -141,6 +142,27 @@ def test_agent_invalid_status_raises(tmp_path: Path):
               - some_task
             config_reference: agents/bad/config
             status: definitely_not_a_status
+            priority: high
+        """,
+    )
+    with pytest.raises(AgentRegistryError):
+        AgentRegistry(path)
+
+
+def test_agent_invalid_priority_raises(tmp_path: Path):
+    path = _write_registry(
+        tmp_path,
+        """
+        agents:
+          - name: bad_priority_agent
+            provider: test
+            capabilities:
+              - name: something
+            supported_tasks:
+              - some_task
+            config_reference: agents/bad/config
+            status: active
+            priority: super_ultra_high
         """,
     )
     with pytest.raises(AgentRegistryError):
@@ -160,6 +182,7 @@ def test_duplicate_agent_name_raises(tmp_path: Path):
               - some_task
             config_reference: agents/dup/config
             status: active
+            priority: high
           - name: dup_agent
             provider: test
             capabilities:
@@ -168,6 +191,7 @@ def test_duplicate_agent_name_raises(tmp_path: Path):
               - other_task
             config_reference: agents/dup/config
             status: active
+            priority: high
         """,
     )
     with pytest.raises(AgentRegistryError):
@@ -187,10 +211,12 @@ def test_valid_minimal_custom_registry_loads(tmp_path: Path):
               - minimal_task
             config_reference: agents/minimal/config
             status: planned
+            priority: low
         """,
     )
     registry = AgentRegistry(path)
     assert len(registry) == 1
     agent = registry.get_agent("minimal_agent")
     assert agent.status == AgentStatus.PLANNED
+    assert agent.priority == AgentPriority.LOW
     assert agent.has_capability("minimal_capability")

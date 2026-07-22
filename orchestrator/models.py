@@ -32,6 +32,17 @@ class AgentStatus(str, Enum):
     PLANNED = "planned"
 
 
+class AgentPriority(str, Enum):
+    """Relative priority used to break ties when multiple active agents
+    are eligible for the same task. Mirrors the priority scale already
+    used in config/agents.yaml (high/medium), with 'low' added for
+    completeness."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 class ExecutionState(str, Enum):
     """State machine for an AgentExecution.
 
@@ -73,6 +84,7 @@ class Agent:
     supported_tasks: tuple[str, ...]
     config_reference: str
     status: AgentStatus
+    priority: AgentPriority
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -99,7 +111,6 @@ class AgentTask:
     task_type: str
     description: str
     required_capabilities: tuple[str, ...] = field(default_factory=tuple)
-    priority: str = "medium"
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def __post_init__(self) -> None:

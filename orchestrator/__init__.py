@@ -21,6 +21,7 @@ from orchestrator.models import (
     AgentCapability,
     AgentTask,
     AgentExecution,
+    AgentPriority,
     ExecutionState,
     AgentStatus,
 )
@@ -32,6 +33,7 @@ from orchestrator.exceptions import (
     NoSuitableAgentError,
     AgentUnavailableError,
     UnknownExecutionError,
+    InvalidStateTransitionError,
 )
 
 __all__ = [
@@ -39,6 +41,7 @@ __all__ = [
     "AgentCapability",
     "AgentTask",
     "AgentExecution",
+    "AgentPriority",
     "ExecutionState",
     "AgentStatus",
     "AgentRegistry",
@@ -48,6 +51,7 @@ __all__ = [
     "NoSuitableAgentError",
     "AgentUnavailableError",
     "UnknownExecutionError",
+    "InvalidStateTransitionError",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

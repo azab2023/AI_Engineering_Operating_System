@@ -31,7 +31,7 @@ import yaml
 
 from orchestrator.exceptions import AgentRegistryError
 from orchestrator.logging_setup import get_logger
-from orchestrator.models import Agent, AgentCapability, AgentStatus
+from orchestrator.models import Agent, AgentCapability, AgentPriority, AgentStatus
 
 logger = get_logger("registry")
 
@@ -42,6 +42,7 @@ _REQUIRED_AGENT_FIELDS = {
     "supported_tasks",
     "config_reference",
     "status",
+    "priority",
 }
 
 DEFAULT_REGISTRY_PATH = (
@@ -156,6 +157,15 @@ class AgentRegistry:
                 f"Must be one of {[s.value for s in AgentStatus]}"
             ) from exc
 
+        raw_priority = entry["priority"]
+        try:
+            priority = AgentPriority(raw_priority)
+        except ValueError as exc:
+            raise AgentRegistryError(
+                f"Agent {entry.get('name')!r}: invalid priority {raw_priority!r}. "
+                f"Must be one of {[p.value for p in AgentPriority]}"
+            ) from exc
+
         try:
             return Agent(
                 name=entry["name"],
@@ -164,6 +174,7 @@ class AgentRegistry:
                 supported_tasks=tuple(raw_tasks),
                 config_reference=entry["config_reference"],
                 status=status,
+                priority=priority,
             )
         except ValueError as exc:
             raise AgentRegistryError(f"Invalid agent definition at index {index}: {exc}") from exc

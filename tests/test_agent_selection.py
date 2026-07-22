@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import textwrap
+from pathlib import Path
+
 import pytest
 
 from orchestrator.core import Orchestrator
@@ -9,6 +12,7 @@ from orchestrator.exceptions import AgentUnavailableError, NoSuitableAgentError
 from orchestrator.models import (
     Agent,
     AgentCapability,
+    AgentPriority,
     AgentStatus,
     AgentTask,
 )
@@ -68,6 +72,7 @@ def test_select_agent_skips_inactive_agents():
         supported_tasks=("niche_task",),
         config_reference="agents/inactive_only/config",
         status=AgentStatus.INACTIVE,
+        priority=AgentPriority.MEDIUM,
     )
 
     class _SingleAgentRegistry:
@@ -83,11 +88,95 @@ def test_select_agent_skips_inactive_agents():
     assert exc_info.value.status == "inactive"
 
 
-def test_select_agent_picks_first_eligible_when_multiple_match(orchestrator: Orchestrator):
+def test_select_agent_picks_highest_priority_when_multiple_match(orchestrator: Orchestrator):
+    # Both codex (priority: high) and aider (priority: medium) support 'debugging'.
+    # codex must win because it has higher priority, not because of file order alone.
     task = AgentTask(task_type="debugging", description="Fix a bug")
     agent = orchestrator.select_agent(task)
-    # Both codex and aider support 'debugging'; selection must be deterministic.
-    assert agent.name in {"codex", "aider"}
+    assert agent.name == "codex"
+    assert agent.priority == AgentPriority.HIGH
+
     # Calling again must return the same agent (determinism, not randomness).
     agent_again = orchestrator.select_agent(task)
     assert agent.name == agent_again.name
+
+
+def test_select_agent_priority_overrides_registry_order(tmp_path: Path):
+    # aider is listed FIRST but has lower priority than codex, listed SECOND.
+    # If selection were still pure "first in file" (pre-patch behavior), this
+    # would incorrectly select aider. Priority must take precedence over order.
+    path = tmp_path / "agent_registry.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """
+            agents:
+              - name: aider
+                provider: openai
+                capabilities:
+                  - name: debugging
+                supported_tasks:
+                  - debugging
+                config_reference: agents/aider/config
+                status: active
+                priority: medium
+              - name: codex
+                provider: openai
+                capabilities:
+                  - name: debugging
+                supported_tasks:
+                  - debugging
+                config_reference: agents/openai-codex/config
+                status: active
+                priority: high
+            """
+        ),
+        encoding="utf-8",
+    )
+    registry = AgentRegistry(path)
+    orchestrator = Orchestrator(registry)
+
+    task = AgentTask(task_type="debugging", description="Fix a bug")
+    agent = orchestrator.select_agent(task)
+
+    assert agent.name == "codex"
+
+
+def test_select_agent_tie_breaks_by_registry_order_when_priority_equal(tmp_path: Path):
+    # Two equal-priority agents: registry (insertion) order must decide, and
+    # that choice must be stable across repeated calls.
+    path = tmp_path / "agent_registry.yaml"
+    path.write_text(
+        textwrap.dedent(
+            """
+            agents:
+              - name: second_but_first_in_file
+                provider: test
+                capabilities:
+                  - name: writing
+                supported_tasks:
+                  - writing
+                config_reference: agents/a/config
+                status: active
+                priority: high
+              - name: also_high_priority
+                provider: test
+                capabilities:
+                  - name: writing
+                supported_tasks:
+                  - writing
+                config_reference: agents/b/config
+                status: active
+                priority: high
+            """
+        ),
+        encoding="utf-8",
+    )
+    registry = AgentRegistry(path)
+    orchestrator = Orchestrator(registry)
+
+    task = AgentTask(task_type="writing", description="Draft something")
+    first_call = orchestrator.select_agent(task)
+    second_call = orchestrator.select_agent(task)
+
+    assert first_call.name == "second_but_first_in_file"
+    assert second_call.name == "second_but_first_in_file"
