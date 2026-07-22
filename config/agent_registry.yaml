@@ -1,0 +1,92 @@
+# Agent Registry — Phase-04 (Agent Orchestration)
+#
+# Canonical, structured source of agent metadata used by orchestrator.registry.
+# This is additive to, not a replacement for, config/agents.yaml (role/priority)
+# and config/models.yaml (provider/purpose), which predate this phase and are
+# left unmodified. See docs/architecture/decision-records/ADR-0002 for why a
+# new file was introduced instead of extending those two.
+#
+# Field reference (all required per agent):
+#   name              - unique identifier, matches keys used in agents.yaml,
+#                        models.yaml, and prompts/prompt_registry.yaml
+#   provider          - upstream model/service provider
+#   capabilities      - list of {name, description} the agent offers
+#   supported_tasks   - task_type strings the orchestrator can route to this agent
+#   config_reference  - path to this agent's dedicated config folder
+#   status            - active | inactive | planned
+
+agents:
+
+  - name: claude_code
+    provider: anthropic
+    capabilities:
+      - name: architecture_review
+        description: Reviews and reasons about system architecture and design trade-offs.
+      - name: documentation
+        description: Produces and maintains technical documentation.
+      - name: automation_design
+        description: Designs workflows and automation systems.
+      - name: complex_reasoning
+        description: Multi-step reasoning across large context.
+    supported_tasks:
+      - architecture_review
+      - documentation
+      - automation_design
+    config_reference: agents/claude-code/config
+    status: active
+
+  - name: codex
+    provider: openai
+    capabilities:
+      - name: code_generation
+        description: Generates production-quality code from a specification.
+      - name: code_refactoring
+        description: Safely restructures existing code without changing behavior.
+      - name: debugging
+        description: Analyzes errors and produces fixes.
+      - name: testing
+        description: Creates and validates automated tests.
+      - name: architecture_review
+        description: Reviews system architecture from a software-engineering angle.
+    supported_tasks:
+      - code_generation
+      - code_refactoring
+      - debugging
+      - testing
+      - architecture_review
+    config_reference: agents/openai-codex/config
+    status: active
+
+  - name: aider
+    provider: openai
+    capabilities:
+      - name: code_generation
+        description: Generates code changes directly against a local repository.
+      - name: code_refactoring
+        description: Safely restructures existing code without changing behavior.
+      - name: debugging
+        description: Analyzes errors and produces fixes.
+    supported_tasks:
+      - code_generation
+      - code_refactoring
+      - debugging
+    config_reference: agents/aider/config
+    status: active
+
+  - name: gemini
+    provider: google
+    capabilities:
+      - name: documentation
+        description: Produces and maintains technical documentation.
+      - name: automation_design
+        description: Designs workflows and automation systems.
+      - name: multimodal_analysis
+        description: Analyzes non-text inputs (images, diagrams) alongside text.
+      - name: research
+        description: Gathers and synthesizes information from multiple sources.
+    supported_tasks:
+      - documentation
+      - automation_design
+      - research
+    config_reference: agents/gemini/config
+    status: active

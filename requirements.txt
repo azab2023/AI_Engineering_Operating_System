@@ -1,0 +1,6 @@
+# Phase-04 (Agent Orchestration) dependencies.
+# Kept minimal per Phase-04 constraints: no ORM, no validation framework,
+# no HTTP/agent-client libraries (no agent is actually invoked in this phase).
+
+PyYAML>=6.0
+pytest>=7.0
