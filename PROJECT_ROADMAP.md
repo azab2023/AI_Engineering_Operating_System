@@ -5,7 +5,7 @@
 
 Current Version: **v0.5.0**
 
-Current Branch: **phase-06**
+Current Branch: **phase-05**
 
 Last Completed Phase: **Phase-05 – Persistence Layer**
 
@@ -42,7 +42,9 @@ Last Completed Phase: **Phase-05 – Persistence Layer**
 
 # Current Focus
 
-**Phase-06 – Agent Execution Engine**
+**Phase-05 has been implemented and verified** (real `orchestrator/persistence/` package, `SqliteExecutionRepository`, CI workflow, ADR-0003, `pyproject.toml`, `requirements-dev.txt` all present and passing Ruff + Pytest — see ADR-0003 for the prior false-completion finding this corrects). Phase-06 has not started.
+
+**Phase-06 – Agent Execution Engine** (next, pending approval)
 
 Objectives:
 

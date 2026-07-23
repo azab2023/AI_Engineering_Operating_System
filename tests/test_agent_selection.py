@@ -16,7 +16,7 @@ from orchestrator.models import (
     AgentStatus,
     AgentTask,
 )
-from orchestrator.registry import AgentRegistry, DEFAULT_REGISTRY_PATH
+from orchestrator.registry import DEFAULT_REGISTRY_PATH, AgentRegistry
 
 
 @pytest.fixture()

@@ -9,8 +9,7 @@ import pytest
 
 from orchestrator.exceptions import AgentRegistryError
 from orchestrator.models import AgentPriority, AgentStatus
-from orchestrator.registry import AgentRegistry, DEFAULT_REGISTRY_PATH
-
+from orchestrator.registry import DEFAULT_REGISTRY_PATH, AgentRegistry
 
 # --------------------------------------------------------------------- #
 # Against the real, shipped config/agent_registry.yaml
@@ -18,9 +17,7 @@ from orchestrator.registry import AgentRegistry, DEFAULT_REGISTRY_PATH
 
 
 def test_real_registry_file_exists():
-    assert DEFAULT_REGISTRY_PATH.exists(), (
-        f"Expected registry file at {DEFAULT_REGISTRY_PATH}"
-    )
+    assert DEFAULT_REGISTRY_PATH.exists(), f"Expected registry file at {DEFAULT_REGISTRY_PATH}"
 
 
 def test_real_registry_loads_all_four_agents():

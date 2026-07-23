@@ -39,9 +39,7 @@ class AgentUnavailableError(OrchestratorError):
     def __init__(self, agent_name: str, status: str):
         self.agent_name = agent_name
         self.status = status
-        super().__init__(
-            f"Agent {agent_name!r} matched but is not active (status={status!r})"
-        )
+        super().__init__(f"Agent {agent_name!r} matched but is not active (status={status!r})")
 
 
 class UnknownExecutionError(OrchestratorError):
@@ -50,6 +48,32 @@ class UnknownExecutionError(OrchestratorError):
     def __init__(self, execution_id: str):
         self.execution_id = execution_id
         super().__init__(f"No execution found with id={execution_id!r}")
+
+
+class PersistenceError(OrchestratorError):
+    """Base class for all Phase-05 persistence-layer errors.
+
+    Raised for failures in the storage backend itself (schema
+    initialization, connection, read/write corruption) as distinct from
+    ``AgentRegistryError`` (config loading) or the execution-state errors
+    below, which are orchestration-logic errors, not storage errors.
+    """
+
+
+class ExecutionAlreadyExistsError(PersistenceError):
+    """Raised when adding an execution whose execution_id is already stored."""
+
+    def __init__(self, execution_id: str):
+        self.execution_id = execution_id
+        super().__init__(f"Execution already exists with id={execution_id!r}")
+
+
+class ExecutionSerializationError(PersistenceError):
+    """Raised when an ``AgentExecution`` cannot be serialized to, or
+    reconstructed from, a persistence backend's stored representation
+    (e.g. an unknown ``state``/``priority`` value in a SQLite row, or a
+    reference to an ``assigned_agent`` no longer present in the current
+    agent registry)."""
 
 
 class InvalidStateTransitionError(OrchestratorError):

@@ -16,25 +16,25 @@ Scope note (Phase-04):
     execution backends are out of scope for this phase.
 """
 
+from orchestrator.core import Orchestrator
+from orchestrator.exceptions import (
+    AgentRegistryError,
+    AgentUnavailableError,
+    InvalidStateTransitionError,
+    NoSuitableAgentError,
+    OrchestratorError,
+    UnknownExecutionError,
+)
 from orchestrator.models import (
     Agent,
     AgentCapability,
-    AgentTask,
     AgentExecution,
     AgentPriority,
-    ExecutionState,
     AgentStatus,
+    AgentTask,
+    ExecutionState,
 )
 from orchestrator.registry import AgentRegistry
-from orchestrator.core import Orchestrator
-from orchestrator.exceptions import (
-    OrchestratorError,
-    AgentRegistryError,
-    NoSuitableAgentError,
-    AgentUnavailableError,
-    UnknownExecutionError,
-    InvalidStateTransitionError,
-)
 
 __all__ = [
     "Agent",

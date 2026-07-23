@@ -53,6 +53,28 @@ producing inconsistent outputs.
 Phase-01 delivers the folder skeleton and documentation for every layer
 above; no orchestration, adapter, or CI logic is implemented yet.
 
+## 3.1 Persistence Layer (Phase-05)
+
+`orchestrator/persistence/` sits underneath the Orchestration Layer and
+gives `AgentExecution` records a durable home:
+
+- `ExecutionRepository` — the Repository Pattern interface
+  `Orchestrator` depends on (`orchestrator/persistence/repository.py`).
+- `InMemoryExecutionRepository` — Phase-04's dict-backed behavior,
+  now the default backend, preserving backward compatibility.
+- `SqliteExecutionRepository` — the new durable backend
+  (`orchestrator/persistence/sqlite_repository.py`), storing execution
+  records in a SQLite database via the stdlib `sqlite3` module.
+
+`.github/workflows/ci.yml` runs `ruff check` and `pytest` on every push
+and pull request, gating this layer (and everything else in
+`orchestrator/`) in CI for the first time.
+
+See [`decision-records/ADR-0003-persistence-layer.md`](decision-records/ADR-0003-persistence-layer.md)
+for the full rationale, including the scope boundaries (execution
+records only, not the agent registry) and why persistence is opt-in
+rather than the new default.
+
 ## 4. Related Documents
 
 - [`agent-integration.md`](agent-integration.md) — how each agent plugs in

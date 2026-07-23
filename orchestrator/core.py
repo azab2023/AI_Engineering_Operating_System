@@ -31,6 +31,16 @@ meant to follow, and raises InvalidStateTransitionError otherwise. This
 was added in the Phase-04 patch release to close a gap where, e.g.,
 approve() could previously be called on an execution that had never been
 routed.
+
+Persistence (Phase-05): execution storage is delegated to an
+``ExecutionRepository`` (see ``orchestrator.persistence``) instead of a
+hard-coded dict. Every method that used to mutate ``self._executions``
+directly now also calls ``self._repository.update(execution)`` right
+after mutating the execution, so state changes are durable when a
+persistent repository (e.g. ``SqliteExecutionRepository``) is supplied.
+When no repository is supplied, ``InMemoryExecutionRepository`` is used,
+which reproduces Phase-04's exact in-memory-only behavior -- see
+ADR-0003 for why this keeps existing callers unaffected.
 """
 
 from __future__ import annotations
@@ -46,9 +56,12 @@ from orchestrator.models import (
     Agent,
     AgentExecution,
     AgentPriority,
-    AgentStatus,
     AgentTask,
     ExecutionState,
+)
+from orchestrator.persistence.repository import (
+    ExecutionRepository,
+    InMemoryExecutionRepository,
 )
 from orchestrator.registry import AgentRegistry
 
@@ -66,13 +79,22 @@ _PRIORITY_RANK: dict[AgentPriority, int] = {
 class Orchestrator:
     """Coordinates task submission, agent selection, and execution tracking.
 
-    State is held in memory only for this phase (no persistence layer was
-    requested). Each Orchestrator instance owns its own execution store.
+    Args:
+        registry: the agent registry used for selection.
+        repository: where execution records are stored. Defaults to
+            ``InMemoryExecutionRepository()`` (Phase-04 behavior: state
+            lives only for the lifetime of the process) when not given.
+            Pass a ``SqliteExecutionRepository`` for durable, cross-restart
+            execution history.
     """
 
-    def __init__(self, registry: AgentRegistry):
+    def __init__(
+        self,
+        registry: AgentRegistry,
+        repository: ExecutionRepository | None = None,
+    ):
         self._registry = registry
-        self._executions: dict[str, AgentExecution] = {}
+        self._repository = repository if repository is not None else InMemoryExecutionRepository()
 
     # ------------------------------------------------------------------ #
     # Public workflow
@@ -81,7 +103,7 @@ class Orchestrator:
     def submit_task(self, task: AgentTask) -> AgentExecution:
         """Register a new task and create its execution record (state=PENDING)."""
         execution = AgentExecution(task=task, state=ExecutionState.PENDING)
-        self._executions[execution.execution_id] = execution
+        self._repository.add(execution)
         logger.info(
             "Task submitted: task_id=%s task_type=%s execution_id=%s",
             task.task_id,
@@ -133,7 +155,7 @@ class Orchestrator:
         Does not invoke the agent. Transitions:
             PENDING -> (select agent) -> ASSIGNED -> RUNNING
         """
-        if execution.execution_id not in self._executions:
+        if execution.execution_id not in self._repository:
             raise UnknownExecutionError(execution.execution_id)
 
         if execution.state != ExecutionState.PENDING:
@@ -150,14 +172,14 @@ class Orchestrator:
             execution.state = ExecutionState.FAILED
             execution.error = str(exc)
             execution.touch()
-            logger.warning(
-                "Routing failed for execution_id=%s: %s", execution.execution_id, exc
-            )
+            self._repository.update(execution)
+            logger.warning("Routing failed for execution_id=%s: %s", execution.execution_id, exc)
             raise
 
         execution.assigned_agent = agent
         execution.state = ExecutionState.ASSIGNED
         execution.touch()
+        self._repository.update(execution)
 
         # No execution backend exists yet in this phase; we represent the
         # hand-off itself as reaching RUNNING, then immediately require
@@ -165,6 +187,7 @@ class Orchestrator:
         # human-in-the-loop review structurally mandatory.
         execution.state = ExecutionState.RUNNING
         execution.touch()
+        self._repository.update(execution)
 
         logger.info(
             "Execution routed: execution_id=%s agent=%s state=%s",
@@ -190,6 +213,7 @@ class Orchestrator:
         execution.result = result
         execution.state = ExecutionState.AWAITING_APPROVAL
         execution.touch()
+        self._repository.update(execution)
         logger.info("Execution awaiting approval: execution_id=%s", execution_id)
         return execution
 
@@ -211,18 +235,13 @@ class Orchestrator:
             )
         execution.state = ExecutionState.COMPLETED
         execution.touch()
+        self._repository.update(execution)
         logger.info("Execution approved and completed: execution_id=%s", execution_id)
         return execution
 
     def track(self, execution_id: str) -> AgentExecution:
         """Look up the current state of an execution by id."""
-        try:
-            return self._executions[execution_id]
-        except KeyError as exc:
-            raise UnknownExecutionError(execution_id) from exc
+        return self._repository.get(execution_id)
 
     def list_executions(self, state: ExecutionState | None = None) -> list[AgentExecution]:
-        executions = list(self._executions.values())
-        if state is not None:
-            executions = [e for e in executions if e.state == state]
-        return executions
+        return self._repository.list(state)

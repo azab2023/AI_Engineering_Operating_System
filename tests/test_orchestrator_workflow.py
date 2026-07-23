@@ -1,4 +1,14 @@
-"""Unit tests for the end-to-end Orchestrator workflow (submit -> route -> track)."""
+"""Unit tests for the end-to-end Orchestrator workflow (submit -> route -> track).
+
+Phase-05: this suite is parametrized over both ``ExecutionRepository``
+backends (``InMemoryExecutionRepository`` and, with an in-memory SQLite
+database, ``SqliteExecutionRepository``) so the entire Phase-04 workflow
+is verified to behave identically regardless of which backend
+``Orchestrator`` is constructed with. This is the primary backward-
+compatibility regression check for Phase-05: everything that passed
+against the dict-backed store in Phase-04 must still pass, unmodified,
+against the SQLite-backed store.
+"""
 
 from __future__ import annotations
 
@@ -11,13 +21,19 @@ from orchestrator.exceptions import (
     UnknownExecutionError,
 )
 from orchestrator.models import AgentExecution, AgentTask, ExecutionState
-from orchestrator.registry import AgentRegistry, DEFAULT_REGISTRY_PATH
+from orchestrator.persistence import InMemoryExecutionRepository, SqliteExecutionRepository
+from orchestrator.registry import DEFAULT_REGISTRY_PATH, AgentRegistry
 
 
-@pytest.fixture()
-def orchestrator() -> Orchestrator:
+@pytest.fixture(params=["in_memory", "sqlite"])
+def orchestrator(request: pytest.FixtureRequest) -> Orchestrator:
     registry = AgentRegistry(DEFAULT_REGISTRY_PATH)
-    return Orchestrator(registry)
+    if request.param == "sqlite":
+        repository = SqliteExecutionRepository(registry, db_path=":memory:")
+        request.addfinalizer(repository.close)
+    else:
+        repository = InMemoryExecutionRepository()
+    return Orchestrator(registry, repository=repository)
 
 
 def test_submit_task_creates_pending_execution(orchestrator: Orchestrator):
@@ -152,7 +168,15 @@ def test_approve_rejected_when_already_completed(orchestrator: Orchestrator):
     orchestrator.route(execution)
     orchestrator.mark_awaiting_approval(execution.execution_id, result="done")
     orchestrator.approve(execution.execution_id)
-    assert execution.state == ExecutionState.COMPLETED
+    # Read back via track() rather than asserting on the local `execution`
+    # reference: mark_awaiting_approval()/approve() mutate the object
+    # returned by an internal track() call, not necessarily the caller's
+    # original reference. InMemoryExecutionRepository happens to return
+    # the same object every time (so both would pass), but
+    # SqliteExecutionRepository deserializes a fresh object on each read,
+    # so only track() reflects the current, authoritative state
+    # regardless of backend.
+    assert orchestrator.track(execution.execution_id).state == ExecutionState.COMPLETED
 
     with pytest.raises(InvalidStateTransitionError):
         orchestrator.approve(execution.execution_id)  # double-approve

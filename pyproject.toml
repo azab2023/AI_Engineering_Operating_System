@@ -1,0 +1,39 @@
+[project]
+name = "aeos"
+version = "0.5.0"
+description = "AI Engineering Operating System (AEOS) - orchestration and persistence layer for managing multiple AI coding agents."
+requires-python = ">=3.11"
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["orchestrator", "orchestrator.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["orchestrator", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+# UP042: suggests `enum.StrEnum` in place of `class X(str, Enum)`. The
+# Phase-04 models (AgentStatus/AgentPriority/ExecutionState) predate this
+# ruleset and use the latter deliberately; restyling them is out of
+# scope for Phase-05 and left for whichever phase next touches models.py.
+ignore = ["UP042"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["orchestrator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

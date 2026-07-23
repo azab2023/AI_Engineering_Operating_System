@@ -45,9 +45,7 @@ _REQUIRED_AGENT_FIELDS = {
     "priority",
 }
 
-DEFAULT_REGISTRY_PATH = (
-    Path(__file__).resolve().parent.parent / "config" / "agent_registry.yaml"
-)
+DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "config" / "agent_registry.yaml"
 
 
 class AgentRegistry:
@@ -64,9 +62,7 @@ class AgentRegistry:
 
     def _load(self) -> None:
         if not self._registry_path.exists():
-            raise AgentRegistryError(
-                f"Agent registry file not found: {self._registry_path}"
-            )
+            raise AgentRegistryError(f"Agent registry file not found: {self._registry_path}")
 
         try:
             raw_text = self._registry_path.read_text(encoding="utf-8")
@@ -89,17 +85,13 @@ class AgentRegistry:
 
         agents_data = data["agents"]
         if not isinstance(agents_data, list) or not agents_data:
-            raise AgentRegistryError(
-                "Agent registry 'agents' key must be a non-empty list"
-            )
+            raise AgentRegistryError("Agent registry 'agents' key must be a non-empty list")
 
         seen_names: set[str] = set()
         for index, entry in enumerate(agents_data):
             agent = self._parse_agent(entry, index)
             if agent.name in seen_names:
-                raise AgentRegistryError(
-                    f"Duplicate agent name in registry: {agent.name!r}"
-                )
+                raise AgentRegistryError(f"Duplicate agent name in registry: {agent.name!r}")
             seen_names.add(agent.name)
             self._agents[agent.name] = agent
 
@@ -112,7 +104,8 @@ class AgentRegistry:
     def _parse_agent(self, entry: Any, index: int) -> Agent:
         if not isinstance(entry, dict):
             raise AgentRegistryError(
-                f"Agent registry entry at index {index} must be a mapping, got {type(entry).__name__}"
+                f"Agent registry entry at index {index} must be a mapping, "
+                f"got {type(entry).__name__}"
             )
 
         missing = _REQUIRED_AGENT_FIELDS - entry.keys()

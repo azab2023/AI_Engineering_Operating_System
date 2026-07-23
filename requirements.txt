@@ -1,6 +1,9 @@
-# Phase-04 (Agent Orchestration) dependencies.
-# Kept minimal per Phase-04 constraints: no ORM, no validation framework,
-# no HTTP/agent-client libraries (no agent is actually invoked in this phase).
+# Runtime dependencies only. Kept minimal per Phase-04/Phase-05
+# constraints: no ORM, no validation framework, no HTTP/agent-client
+# libraries. The Phase-05 persistence layer uses SQLite via the stdlib
+# `sqlite3` module, so it adds no new entry here.
+#
+# Dev/CI-only tooling (ruff, pytest) moved to requirements-dev.txt as of
+# Phase-05 -- see ADR-0003, decision 8.
 
 PyYAML>=6.0
-pytest>=7.0
