@@ -76,6 +76,65 @@ class ExecutionSerializationError(PersistenceError):
     agent registry)."""
 
 
+class ExecutionEngineError(OrchestratorError):
+    """Base class for all Phase-06 agent-execution-engine errors.
+
+    Distinct from ``PersistenceError`` (storage failures) and the
+    orchestration-logic errors above (selection/state-transition
+    failures) -- these errors originate from actually invoking an
+    agent's CLI, not from deciding which agent to use or tracking state.
+    """
+
+
+class AgentCommandNotConfiguredError(ExecutionEngineError):
+    """Raised when an agent has no invocation command registered in
+    ``config/agent_commands.yaml``."""
+
+    def __init__(self, agent_name: str):
+        self.agent_name = agent_name
+        super().__init__(f"No invocation command configured for agent {agent_name!r}")
+
+
+class AgentCommandRegistryError(ExecutionEngineError):
+    """Raised when ``config/agent_commands.yaml`` cannot be loaded or fails
+    validation. Mirrors ``AgentRegistryError``'s fail-loudly philosophy."""
+
+
+class AgentInvocationError(ExecutionEngineError):
+    """Raised when an agent's CLI could not be started at all (e.g. the
+    executable is missing from PATH), as distinct from the CLI running
+    and exiting non-zero, which is reported via ``ExecutionResult`` and
+    handled as a retryable failure by ``ExecutionEngine`` instead."""
+
+    def __init__(self, agent_name: str, reason: str):
+        self.agent_name = agent_name
+        self.reason = reason
+        super().__init__(f"Failed to invoke agent {agent_name!r}: {reason}")
+
+
+class AgentTimeoutError(ExecutionEngineError):
+    """Raised when an agent's CLI does not complete within its configured
+    timeout. Treated as retryable by ``ExecutionEngine``."""
+
+    def __init__(self, agent_name: str, timeout_seconds: float):
+        self.agent_name = agent_name
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"Agent {agent_name!r} timed out after {timeout_seconds}s")
+
+
+class MaxRetriesExceededError(ExecutionEngineError):
+    """Raised internally when every retry attempt for an execution has
+    been exhausted. ``ExecutionEngine`` catches this and transitions the
+    execution to ``FAILED`` via ``Orchestrator.mark_failed`` rather than
+    letting it propagate."""
+
+    def __init__(self, agent_name: str, attempts: int, last_error: str):
+        self.agent_name = agent_name
+        self.attempts = attempts
+        self.last_error = last_error
+        super().__init__(f"Agent {agent_name!r} failed after {attempts} attempt(s): {last_error}")
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.

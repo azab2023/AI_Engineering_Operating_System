@@ -1,0 +1,34 @@
+# Agent Invocation Commands — Phase-06 (Agent Execution Engine)
+#
+# Maps each agent name in config/agent_registry.yaml to the CLI command
+# used to actually invoke it. This is additive: it does not modify
+# agent_registry.yaml's schema (see ADR-0004), so Phase-04/05 callers
+# that only construct an AgentRegistry are unaffected.
+#
+# Field reference (all required per agent):
+#   command         - argv list. Exactly one token must be the literal
+#                      placeholder "{task_description}"; it is replaced
+#                      with the task's description at invocation time.
+#                      Never a shell string -- commands are executed
+#                      directly (shell=False) to avoid shell-injection
+#                      risk from task descriptions.
+#   timeout_seconds  - max wall-clock time before the invocation is
+#                       treated as a (retryable) timeout.
+
+commands:
+
+  claude_code:
+    command: ["claude", "-p", "{task_description}"]
+    timeout_seconds: 300
+
+  codex:
+    command: ["codex", "exec", "{task_description}"]
+    timeout_seconds: 300
+
+  aider:
+    command: ["aider", "--yes", "--message", "{task_description}"]
+    timeout_seconds: 300
+
+  gemini:
+    command: ["gemini", "-p", "{task_description}"]
+    timeout_seconds: 300

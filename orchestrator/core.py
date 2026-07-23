@@ -239,6 +239,30 @@ class Orchestrator:
         logger.info("Execution approved and completed: execution_id=%s", execution_id)
         return execution
 
+    def mark_failed(self, execution_id: str, error: str) -> AgentExecution:
+        """Mark a running execution as failed.
+
+        Used by ``orchestrator.execution.ExecutionEngine`` (Phase-06) once
+        an agent invocation has exhausted its retries, so a failed run is
+        recorded with the same rigor as a successful one instead of being
+        left stuck in RUNNING. Only valid from RUNNING; raises
+        InvalidStateTransitionError otherwise.
+        """
+        execution = self.track(execution_id)
+        if execution.state != ExecutionState.RUNNING:
+            raise InvalidStateTransitionError(
+                execution_id,
+                action="mark_failed",
+                expected_state=ExecutionState.RUNNING.value,
+                actual_state=execution.state.value,
+            )
+        execution.error = error
+        execution.state = ExecutionState.FAILED
+        execution.touch()
+        self._repository.update(execution)
+        logger.warning("Execution failed: execution_id=%s error=%s", execution_id, error)
+        return execution
+
     def track(self, execution_id: str) -> AgentExecution:
         """Look up the current state of an execution by id."""
         return self._repository.get(execution_id)

@@ -316,3 +316,37 @@ def test_full_lifecycle_cannot_skip_review_step(orchestrator: Orchestrator):
     assert completed.state == ExecutionState.COMPLETED
     assert completed.assigned_agent is not None
     assert completed.result == "reviewed output"
+
+
+# --------------------------------------------------------------------- #
+# mark_failed() (Phase-06: used by ExecutionEngine once retries are
+# exhausted, so a failed invocation is recorded with the same rigor as a
+# successful one instead of being left stuck in RUNNING).
+# --------------------------------------------------------------------- #
+
+
+def test_mark_failed_from_running(orchestrator: Orchestrator):
+    execution = orchestrator.submit_task(_routable_task())
+    routed = orchestrator.route(execution)
+    assert routed.state == ExecutionState.RUNNING
+
+    failed = orchestrator.mark_failed(routed.execution_id, error="agent CLI exited non-zero")
+
+    assert failed.state == ExecutionState.FAILED
+    assert failed.error == "agent CLI exited non-zero"
+
+
+def test_mark_failed_rejected_when_pending(orchestrator: Orchestrator):
+    execution = orchestrator.submit_task(_routable_task())
+    with pytest.raises(InvalidStateTransitionError):
+        orchestrator.mark_failed(execution.execution_id, error="too early")
+
+
+def test_mark_failed_rejected_when_already_completed(orchestrator: Orchestrator):
+    execution = orchestrator.submit_task(_routable_task())
+    routed = orchestrator.route(execution)
+    orchestrator.mark_awaiting_approval(routed.execution_id, result="done")
+    orchestrator.approve(routed.execution_id)
+
+    with pytest.raises(InvalidStateTransitionError):
+        orchestrator.mark_failed(routed.execution_id, error="too late")

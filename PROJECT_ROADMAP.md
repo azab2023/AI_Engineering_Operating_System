@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v0.5.0**
+Current Version: **v0.6.0**
 
-Current Branch: **phase-05**
+Current Branch: **phase-06**
 
-Last Completed Phase: **Phase-05 – Persistence Layer**
+Last Completed Phase: **Phase-06 – Agent Execution Engine**
 
 ---
 
@@ -20,6 +20,7 @@ Last Completed Phase: **Phase-05 – Persistence Layer**
 | Phase-03 | ✅ | v0.3.x | Excel Template & Data Schema |
 | Phase-04 | ✅ | v0.4.1 | Agent Orchestration Layer |
 | Phase-05 | ✅ | v0.5.0 | Persistence Layer (SQLite + Repository Pattern + CI/CD) |
+| Phase-06 | ✅ | v0.6.0 | Agent Execution Engine (Subprocess AgentInvoker + Retry Policy + ADR-0004) |
 
 ---
 
@@ -27,7 +28,6 @@ Last Completed Phase: **Phase-05 – Persistence Layer**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-06 | ⏳ | Agent Execution Engine |
 | Phase-07 | ⏳ | Model Provider Abstraction |
 | Phase-08 | ⏳ | Prompt Management System |
 | Phase-09 | ⏳ | Tool Execution Framework |
@@ -42,19 +42,19 @@ Last Completed Phase: **Phase-05 – Persistence Layer**
 
 # Current Focus
 
-**Phase-05 has been implemented and verified** (real `orchestrator/persistence/` package, `SqliteExecutionRepository`, CI workflow, ADR-0003, `pyproject.toml`, `requirements-dev.txt` all present and passing Ruff + Pytest — see ADR-0003 for the prior false-completion finding this corrects). Phase-06 has not started.
+**Phase-06 has been implemented and verified** (real `orchestrator/execution/` package — `ExecutionEngine`, `AgentInvoker` protocol + `SubprocessAgentInvoker`, `AgentCommandRegistry`, `RetryPolicy`; new `Orchestrator.mark_failed()`; new `config/agent_commands.yaml`; ADR-0004; 115 tests passing Ruff + Pytest). Phase-07 has not started.
 
-**Phase-06 – Agent Execution Engine** (next, pending approval)
+**Phase-06 – Agent Execution Engine** objectives (all met):
 
-Objectives:
+- Execute registered agents. ✅ (`ExecutionEngine.execute()`)
+- Invoke external AI providers. ✅ (via each agent's CLI, per `docs/architecture/agent-integration.md`; see ADR-0004 for why CLI subprocess invocation was chosen over raw HTTP APIs for this phase)
+- Manage execution lifecycle. ✅ (PENDING → RUNNING → AWAITING_APPROVAL / FAILED)
+- Capture execution results. ✅ (`ExecutionResult`, recorded via `mark_awaiting_approval`)
+- Support execution retries. ✅ (`RetryPolicy`, exponential backoff)
+- Integrate with Persistence Layer. ✅ (all outcomes flow through `Orchestrator`, unchanged persistence path)
+- Preserve backward compatibility. ✅ (no changes to `orchestrator/models.py`, `orchestrator/registry.py`, or `agent_registry.yaml`'s schema)
 
-- Execute registered agents.
-- Invoke external AI providers.
-- Manage execution lifecycle.
-- Capture execution results.
-- Support execution retries.
-- Integrate with Persistence Layer.
-- Preserve backward compatibility.
+**Phase-07 – Model Provider Abstraction** (next, pending approval)
 
 ---
 
@@ -67,7 +67,7 @@ Objectives:
 | Agent Registry | ✅ |
 | Orchestrator | ✅ |
 | Persistence | ✅ |
-| Execution Engine | ⏳ |
+| Execution Engine | ✅ |
 | Model Providers | ⏳ |
 | Memory | ⏳ |
 | Security | ⏳ |
@@ -81,7 +81,8 @@ Objectives:
 |----------|-------------|
 | v0.4.1 | Stable Phase-04 |
 | v0.5.0 | Stable Phase-05 |
-| v0.6.0 | Planned Phase-06 |
+| v0.6.0 | Stable Phase-06 |
+| v0.7.0 | Planned Phase-07 |
 
 ---
 
@@ -114,4 +115,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v0.5.0**
+Current Version: **v0.6.0**
