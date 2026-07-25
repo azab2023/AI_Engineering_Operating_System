@@ -1,9 +1,16 @@
 # Runtime dependencies only. Kept minimal per Phase-04/Phase-05
-# constraints: no ORM, no validation framework, no HTTP/agent-client
-# libraries. The Phase-05 persistence layer uses SQLite via the stdlib
-# `sqlite3` module, so it adds no new entry here.
+# constraints: no ORM, no validation framework. The Phase-05
+# persistence layer uses SQLite via the stdlib `sqlite3` module, so it
+# adds no new entry here.
 #
 # Dev/CI-only tooling (ruff, pytest) moved to requirements-dev.txt as of
 # Phase-05 -- see ADR-0003, decision 8.
+#
+# httpx: Phase-07 (Model Provider Abstraction) HTTP client for the
+# provider adapters (orchestrator/providers/*_provider.py). Chosen over
+# `requests` for built-in per-request timeout-as-exception handling and
+# `httpx.MockTransport` for network-free testing -- see ADR-0005
+# decision 7.
 
 PyYAML>=6.0
+httpx>=0.27

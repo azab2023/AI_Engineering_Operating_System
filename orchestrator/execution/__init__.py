@@ -11,6 +11,9 @@ This package provides:
       ``config/agent_commands.yaml`` (command_registry.py)
     - The ``AgentInvoker`` port and its ``SubprocessAgentInvoker``
       implementation, which actually runs an agent's CLI (invoker.py)
+    - ``HttpAgentInvoker`` (Phase-07), a second ``AgentInvoker``
+      implementation that runs an agent via a model provider's HTTP API
+      instead of a CLI subprocess (http_invoker.py); see ADR-0005
     - ``ExecutionEngine``, which routes (if needed), invokes with retries,
       and records the final outcome via ``orchestrator.core.Orchestrator``
       (engine.py)
@@ -23,6 +26,7 @@ beyond 'assigned.'") and ADR-0004 for the full design rationale.
 
 from orchestrator.execution.command_registry import AgentCommandRegistry
 from orchestrator.execution.engine import ExecutionEngine
+from orchestrator.execution.http_invoker import HttpAgentInvoker
 from orchestrator.execution.invoker import AgentInvoker, SubprocessAgentInvoker
 from orchestrator.execution.models import AgentCommand, ExecutionResult, RetryPolicy
 
@@ -33,5 +37,6 @@ __all__ = [
     "AgentCommandRegistry",
     "AgentInvoker",
     "SubprocessAgentInvoker",
+    "HttpAgentInvoker",
     "ExecutionEngine",
 ]

@@ -1,0 +1,59 @@
+# Model Provider Configuration — Phase-07 (Model Provider Abstraction)
+#
+# Maps each agent name in config/agent_registry.yaml to the HTTP model
+# provider used to run it via HttpAgentInvoker, as an alternative to the
+# CLI-based SubprocessAgentInvoker (config/agent_commands.yaml, Phase-06).
+# This is additive: it does not modify agent_registry.yaml, agents.yaml,
+# or models.yaml (see ADR-0005 decision 4), so nothing outside the new
+# orchestrator/providers/ package depends on this file existing.
+#
+# Field reference (all required per agent):
+#   provider_type     - which ModelProvider adapter to use. One of the
+#                        registered adapters (e.g. "anthropic", "openai",
+#                        "gemini"); see ADR-0005 decision 8 for how a new
+#                        provider_type is added without modifying
+#                        HttpAgentInvoker or ExecutionEngine.
+#   enabled            - true|false. A disabled entry is treated as a
+#                        configuration error (ProviderDisabledError) at
+#                        lookup time, not attempted over the network.
+#   base_url            - the provider API endpoint to call.
+#   model                - the provider-side model identifier to request.
+#   api_key_env_var       - name of the environment variable holding the
+#                            credential. NEVER the credential value itself
+#                            -- see CLAUDE.md 'Never commit secrets'.
+#   timeout_seconds        - max wall-clock time before the request is
+#                             treated as a (retryable) timeout.
+
+providers:
+
+  claude_code:
+    provider_type: anthropic
+    enabled: true
+    base_url: https://api.anthropic.com/v1/messages
+    model: claude-sonnet-4-6
+    api_key_env_var: ANTHROPIC_API_KEY
+    timeout_seconds: 300
+
+  codex:
+    provider_type: openai
+    enabled: true
+    base_url: https://api.openai.com/v1/chat/completions
+    model: gpt-4.1
+    api_key_env_var: OPENAI_API_KEY
+    timeout_seconds: 300
+
+  aider:
+    provider_type: openai
+    enabled: false
+    base_url: https://api.openai.com/v1/chat/completions
+    model: gpt-4.1
+    api_key_env_var: OPENAI_API_KEY
+    timeout_seconds: 300
+
+  gemini:
+    provider_type: gemini
+    enabled: true
+    base_url: https://generativelanguage.googleapis.com/v1beta/models
+    model: gemini-2.0-flash
+    api_key_env_var: GEMINI_API_KEY
+    timeout_seconds: 300

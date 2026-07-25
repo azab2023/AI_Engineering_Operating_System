@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v0.6.0**
+Current Version: **v0.7.0**
 
-Current Branch: **phase-06**
+Current Branch: **phase-07**
 
-Last Completed Phase: **Phase-06 – Agent Execution Engine**
+Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 
 ---
 
@@ -21,6 +21,7 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 | Phase-04 | ✅ | v0.4.1 | Agent Orchestration Layer |
 | Phase-05 | ✅ | v0.5.0 | Persistence Layer (SQLite + Repository Pattern + CI/CD) |
 | Phase-06 | ✅ | v0.6.0 | Agent Execution Engine (Subprocess AgentInvoker + Retry Policy + ADR-0004) |
+| Phase-07 | ✅ | v0.7.0 | Model Provider Abstraction (ModelProvider Protocol + Anthropic/OpenAI/Gemini adapters + HttpAgentInvoker + ADR-0005) |
 
 ---
 
@@ -28,7 +29,6 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-07 | ⏳ | Model Provider Abstraction |
 | Phase-08 | ⏳ | Prompt Management System |
 | Phase-09 | ⏳ | Tool Execution Framework |
 | Phase-10 | ⏳ | Memory Management |
@@ -42,7 +42,7 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 
 # Current Focus
 
-**Phase-06 has been implemented and verified** (real `orchestrator/execution/` package — `ExecutionEngine`, `AgentInvoker` protocol + `SubprocessAgentInvoker`, `AgentCommandRegistry`, `RetryPolicy`; new `Orchestrator.mark_failed()`; new `config/agent_commands.yaml`; ADR-0004; 115 tests passing Ruff + Pytest). Phase-07 has not started.
+**Phase-07 has been implemented and verified** (new `orchestrator/providers/` package — `ModelProvider` Protocol, `ModelProviderRegistry`, `ProviderFactory`, `AnthropicProvider`/`OpenAIProvider`/`GeminiProvider` adapters; new `HttpAgentInvoker` in `orchestrator/execution/` as a second `AgentInvoker` implementation; new `config/model_providers.yaml`; ADR-0005; 202 tests passing Ruff + Pytest, up from 115 at Phase-06 close). Phase-08 has not started.
 
 **Phase-06 – Agent Execution Engine** objectives (all met):
 
@@ -54,7 +54,15 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 - Integrate with Persistence Layer. ✅ (all outcomes flow through `Orchestrator`, unchanged persistence path)
 - Preserve backward compatibility. ✅ (no changes to `orchestrator/models.py`, `orchestrator/registry.py`, or `agent_registry.yaml`'s schema)
 
-**Phase-07 – Model Provider Abstraction** (next, pending approval)
+**Phase-07 – Model Provider Abstraction** objectives (all met):
+
+- Invoke a model provider's HTTP API directly, as an alternative to CLI subprocess invocation. ✅ (`HttpAgentInvoker`, closing the ADR-0004 Phase-07 follow-up item)
+- One adapter per provider, no generic branching client. ✅ (`AnthropicProvider`, `OpenAIProvider`, `GeminiProvider`, each behind the `ModelProvider` Protocol)
+- Open/Closed provider extensibility. ✅ (`ProviderFactory` registration dict; ADR-0005 decision 8 — a new provider needs one new adapter + one new config entry, zero changes to `ExecutionEngine` or `HttpAgentInvoker`)
+- Configurable enable/disable per provider. ✅ (`enabled: true|false` in `config/model_providers.yaml`, enforced by `ModelProviderRegistry`)
+- Preserve backward compatibility. ✅ (no changes to `ExecutionEngine`, `Orchestrator`, `orchestrator/models.py`, `orchestrator/registry.py`, the `AgentInvoker` Protocol, or `agent_registry.yaml`'s schema)
+
+**Phase-08 – Prompt Management System** (next, pending approval)
 
 ---
 
@@ -68,7 +76,7 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 | Orchestrator | ✅ |
 | Persistence | ✅ |
 | Execution Engine | ✅ |
-| Model Providers | ⏳ |
+| Model Providers | ✅ |
 | Memory | ⏳ |
 | Security | ⏳ |
 | Production Ready | ⏳ |
@@ -82,7 +90,7 @@ Last Completed Phase: **Phase-06 – Agent Execution Engine**
 | v0.4.1 | Stable Phase-04 |
 | v0.5.0 | Stable Phase-05 |
 | v0.6.0 | Stable Phase-06 |
-| v0.7.0 | Planned Phase-07 |
+| v0.7.0 | Stable Phase-07 |
 
 ---
 
@@ -115,4 +123,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v0.6.0**
+Current Version: **v0.7.0**

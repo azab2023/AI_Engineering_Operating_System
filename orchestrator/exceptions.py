@@ -135,6 +135,89 @@ class MaxRetriesExceededError(ExecutionEngineError):
         super().__init__(f"Agent {agent_name!r} failed after {attempts} attempt(s): {last_error}")
 
 
+class ModelProviderError(OrchestratorError):
+    """Base class for all Phase-07 model-provider-layer errors.
+
+    Distinct from ``ExecutionEngineError`` (Phase-06 CLI-invocation
+    errors): these originate from a ``ModelProvider`` adapter talking to
+    a model provider's HTTP API, not from a subprocess. See
+    ADR-0005 decision 5 for how ``HttpAgentInvoker`` maps these onto the
+    existing ``AgentTimeoutError`` / ``AgentInvocationError`` retry
+    contract ``ExecutionEngine`` already understands, so
+    ``ExecutionEngine`` itself never needs to know this hierarchy
+    exists.
+    """
+
+
+class ModelProviderRegistryError(ModelProviderError):
+    """Raised when ``config/model_providers.yaml`` cannot be loaded or
+    fails validation. Mirrors ``AgentCommandRegistryError``'s (Phase-06)
+    fail-loudly philosophy: a malformed or missing config file is a
+    configuration bug, reported specifically at load time rather than
+    surfacing confusingly later at lookup or invocation time."""
+
+
+class ProviderConfigNotFoundError(ModelProviderRegistryError):
+    """Raised when an agent has no entry in ``config/model_providers.yaml``."""
+
+    def __init__(self, agent_name: str):
+        self.agent_name = agent_name
+        super().__init__(f"No model provider configured for agent {agent_name!r}")
+
+
+class ProviderDisabledError(ModelProviderRegistryError):
+    """Raised when the entry for an agent in
+    ``config/model_providers.yaml`` has ``enabled: false``. This is a
+    configuration state, not a transient failure -- ``HttpAgentInvoker``
+    (Task 7.5) lets it propagate immediately rather than retrying, per
+    ADR-0005 decision 5."""
+
+    def __init__(self, agent_name: str, provider_type: str):
+        self.agent_name = agent_name
+        self.provider_type = provider_type
+        super().__init__(f"Model provider {provider_type!r} for agent {agent_name!r} is disabled")
+
+
+class UnsupportedProviderTypeError(ModelProviderError):
+    """Raised by ``ProviderFactory`` when a ``ProviderConfig.provider_type``
+    has no registered ``ModelProvider`` adapter. A configuration/wiring
+    bug (a provider_type was written in ``config/model_providers.yaml``
+    that no adapter has been registered for), not a transient failure --
+    ``HttpAgentInvoker`` lets it propagate immediately rather than
+    retrying, same as ``ProviderConfigNotFoundError`` /
+    ``ProviderDisabledError``."""
+
+    def __init__(self, provider_type: str):
+        self.provider_type = provider_type
+        super().__init__(f"No ModelProvider adapter registered for provider_type {provider_type!r}")
+
+
+class ProviderTimeoutError(ModelProviderError):
+    """Raised by a ``ModelProvider`` implementation when a request to the
+    provider's API does not complete within its configured
+    ``timeout_seconds``."""
+
+    def __init__(self, provider_type: str, timeout_seconds: float):
+        self.provider_type = provider_type
+        self.timeout_seconds = timeout_seconds
+        super().__init__(f"Provider {provider_type!r} timed out after {timeout_seconds}s")
+
+
+class ProviderRequestError(ModelProviderError):
+    """Raised by a ``ModelProvider`` implementation when a request to the
+    provider's API fails for any reason other than a timeout: a
+    connection/network failure, or a non-2xx HTTP response (including,
+    but not limited to, invalid or expired credentials). Deliberately
+    not split into finer-grained subtypes -- see ADR-0005 decision 5 for
+    why ``HttpAgentInvoker`` treats all of these identically (a single
+    retryable failure)."""
+
+    def __init__(self, provider_type: str, reason: str):
+        self.provider_type = provider_type
+        self.reason = reason
+        super().__init__(f"Request to provider {provider_type!r} failed: {reason}")
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.
