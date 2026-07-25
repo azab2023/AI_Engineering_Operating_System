@@ -30,6 +30,7 @@ from orchestrator.execution.command_registry import AgentCommandRegistry
 from orchestrator.execution.models import ExecutionResult
 from orchestrator.logging_setup import get_logger
 from orchestrator.models import Agent, AgentTask
+from orchestrator.prompts.prompt_manager import PromptManager
 
 logger = get_logger("execution.invoker")
 
@@ -57,16 +58,37 @@ class AgentInvoker(Protocol):
 
 class SubprocessAgentInvoker:
     """Invokes an agent by running its configured CLI command as a
-    subprocess, per ``config/agent_commands.yaml``."""
+    subprocess, per ``config/agent_commands.yaml``.
 
-    def __init__(self, command_registry: AgentCommandRegistry | None = None):
+    Phase-08: if ``task.prompt_id`` is set, the prompt is resolved and
+    rendered via ``PromptManager`` before invocation, and its text is
+    used in place of ``task.description`` (see ADR-0006 decision 6).
+    ``prompt_manager`` is constructed lazily -- only the first time a
+    task actually carries a ``prompt_id`` -- so existing callers that
+    never use prompts are unaffected even if
+    ``prompts/prompt_registry.yaml`` is absent or invalid.
+    """
+
+    def __init__(
+        self,
+        command_registry: AgentCommandRegistry | None = None,
+        prompt_manager: PromptManager | None = None,
+    ):
         self._command_registry = command_registry or AgentCommandRegistry()
+        self._prompt_manager = prompt_manager
+
+    def _resolve_prompt_text(self, agent: Agent, task: AgentTask) -> str:
+        if task.prompt_id is None:
+            return task.description
+        if self._prompt_manager is None:
+            self._prompt_manager = PromptManager()
+        rendered = self._prompt_manager.render(task.prompt_id, agent.name, task.prompt_variables)
+        return rendered.text
 
     def invoke(self, agent: Agent, task: AgentTask) -> ExecutionResult:
+        prompt_text = self._resolve_prompt_text(agent, task)
         agent_command = self._command_registry.get_command(agent.name)
-        argv = [
-            token if token != _PLACEHOLDER else task.description for token in agent_command.command
-        ]
+        argv = [token if token != _PLACEHOLDER else prompt_text for token in agent_command.command]
 
         started = time.monotonic()
         try:

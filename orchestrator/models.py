@@ -106,12 +106,24 @@ class Agent:
 
 @dataclass(frozen=True)
 class AgentTask:
-    """A unit of work to be routed to a suitable agent."""
+    """A unit of work to be routed to a suitable agent.
+
+    Phase-08 addition: ``prompt_id`` / ``prompt_variables`` are optional
+    and additive (see ADR-0006 decision 5 -- the one deliberate exception
+    to this module's otherwise-unchanged-since-Phase-04 status). When
+    ``prompt_id`` is set, the invoker resolves and renders it via
+    ``orchestrator.prompts.PromptManager`` and uses the rendered text in
+    place of ``description``. When ``prompt_id`` is ``None`` (the
+    default), behavior is byte-for-byte identical to pre-Phase-08:
+    ``description`` is used as-is.
+    """
 
     task_type: str
     description: str
     required_capabilities: tuple[str, ...] = field(default_factory=tuple)
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    prompt_id: str | None = None
+    prompt_variables: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.task_type or not self.task_type.strip():

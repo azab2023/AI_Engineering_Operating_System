@@ -218,6 +218,100 @@ class ProviderRequestError(ModelProviderError):
         super().__init__(f"Request to provider {provider_type!r} failed: {reason}")
 
 
+class PromptManagementError(OrchestratorError):
+    """Base class for all Phase-08 prompt-management-layer errors.
+
+    Distinct from ``ExecutionEngineError`` (Phase-06) and
+    ``ModelProviderError`` (Phase-07): these originate from resolving,
+    validating, or rendering a prompt, not from invoking an agent. Per
+    ADR-0006 decision 8, every subclass here is treated as a
+    configuration/validation error, not a transient one --
+    ``SubprocessAgentInvoker`` / ``HttpAgentInvoker`` let all of these
+    propagate out of ``invoke()`` unchanged, exactly like
+    ``ProviderConfigNotFoundError`` / ``ProviderDisabledError`` today, so
+    ``ExecutionEngine`` never needs to know this hierarchy exists.
+    """
+
+
+class PromptRegistryError(PromptManagementError):
+    """Raised when ``prompts/prompt_registry.yaml`` cannot be loaded or
+    fails validation (missing/malformed field, non-existent
+    ``template_path``). Mirrors ``ModelProviderRegistryError``'s
+    fail-loudly philosophy."""
+
+
+class DuplicatePromptKeyError(PromptRegistryError):
+    """Raised when ``prompts/prompt_registry.yaml`` contains the same
+    top-level prompt key more than once.
+
+    This is a direct fix for a previously-documented incident: PyYAML's
+    default loader silently keeps the last value of a duplicate mapping
+    key instead of raising, which once corrupted this exact file. See
+    ADR-0006 decision 3.
+    """
+
+    def __init__(self, prompt_id: str):
+        self.prompt_id = prompt_id
+        super().__init__(
+            f"Duplicate prompt key {prompt_id!r} in prompt registry file "
+            f"(a mapping key must appear at most once)"
+        )
+
+
+class PromptTemplateFileMissingError(PromptRegistryError):
+    """Raised when a prompt entry's ``template_path`` does not exist on
+    disk. Checked at registry-load time, not deferred to first render."""
+
+    def __init__(self, prompt_id: str, template_path: str):
+        self.prompt_id = prompt_id
+        self.template_path = template_path
+        super().__init__(
+            f"Prompt {prompt_id!r} references template_path {template_path!r}, which does not exist"
+        )
+
+
+class PromptNotFoundError(PromptManagementError):
+    """Raised when a requested ``prompt_id`` has no entry in the prompt
+    registry."""
+
+    def __init__(self, prompt_id: str):
+        self.prompt_id = prompt_id
+        super().__init__(f"No prompt found with id={prompt_id!r}")
+
+
+class PromptNotAllowedForAgentError(PromptManagementError):
+    """Raised when ``PromptManager.resolve()``/``render()`` is called
+    with an ``agent_name`` that is not listed in the prompt definition's
+    ``agents``. A configuration mismatch, not a transient failure."""
+
+    def __init__(self, prompt_id: str, agent_name: str):
+        self.prompt_id = prompt_id
+        self.agent_name = agent_name
+        super().__init__(f"Prompt {prompt_id!r} is not allowed for agent {agent_name!r}")
+
+
+class MissingRequiredVariableError(PromptManagementError):
+    """Raised when rendering a prompt omits a variable declared
+    ``required: true`` in its definition."""
+
+    def __init__(self, prompt_id: str, variable_name: str):
+        self.prompt_id = prompt_id
+        self.variable_name = variable_name
+        super().__init__(f"Prompt {prompt_id!r} is missing required variable {variable_name!r}")
+
+
+class UnknownVariableError(PromptManagementError):
+    """Raised when rendering a prompt supplies a variable that is not
+    declared in its definition. Rejected rather than silently ignored,
+    per the project's fail-loudly philosophy (a typo'd variable name
+    should never be silently dropped)."""
+
+    def __init__(self, prompt_id: str, variable_name: str):
+        self.prompt_id = prompt_id
+        self.variable_name = variable_name
+        super().__init__(f"Prompt {prompt_id!r} was given undeclared variable {variable_name!r}")
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.

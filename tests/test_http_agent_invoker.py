@@ -16,11 +16,14 @@ import pytest
 from orchestrator.exceptions import (
     AgentInvocationError,
     AgentTimeoutError,
+    PromptNotAllowedForAgentError,
     ProviderConfigNotFoundError,
     ProviderDisabledError,
 )
 from orchestrator.execution.http_invoker import HttpAgentInvoker
 from orchestrator.models import Agent, AgentCapability, AgentPriority, AgentStatus, AgentTask
+from orchestrator.prompts.prompt_manager import PromptManager
+from orchestrator.prompts.prompt_registry import PromptRegistry
 from orchestrator.providers.models import ProviderConfig
 
 ENV_VAR = "ANTHROPIC_API_KEY"
@@ -69,11 +72,13 @@ def _config() -> ProviderConfig:
     )
 
 
-def _invoker_with_handler(handler) -> HttpAgentInvoker:
+def _invoker_with_handler(handler, prompt_manager: PromptManager | None = None) -> HttpAgentInvoker:
     transport = httpx.MockTransport(handler)
     client = httpx.Client(transport=transport)
     registry = FakeProviderRegistry(config=_config())
-    return HttpAgentInvoker(provider_registry=registry, client=client)
+    return HttpAgentInvoker(
+        provider_registry=registry, client=client, prompt_manager=prompt_manager
+    )
 
 
 # --------------------------------------------------------------------- #
@@ -181,3 +186,63 @@ def test_invoke_propagates_provider_disabled_unchanged():
 
     with pytest.raises(ProviderDisabledError):
         invoker.invoke(_agent("aider"), _task())
+
+
+# --------------------------------------------------------------------- #
+# Phase-08: prompt resolution (ADR-0006 decision 6)
+# --------------------------------------------------------------------- #
+
+
+def test_prompt_id_none_uses_description_unchanged_from_phase07(monkeypatch: pytest.MonkeyPatch):
+    """Regression guard: when task.prompt_id is None, behavior must be
+    byte-for-byte identical to pre-Phase-08."""
+    monkeypatch.setenv(ENV_VAR, "sk-ant-test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert b"write the README" in request.read()
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]})
+
+    invoker = _invoker_with_handler(handler)
+    result = invoker.invoke(_agent(), _task())
+    assert result.output == "ok"
+
+
+def test_prompt_id_set_renders_via_prompt_manager(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_VAR, "sk-ant-test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.read()
+        assert b"write the README" not in body
+        assert b"add two numbers" in body
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "ok"}]})
+
+    invoker = _invoker_with_handler(
+        handler, prompt_manager=PromptManager(registry=PromptRegistry())
+    )
+    task = AgentTask(
+        task_type="documentation",
+        description="write the README",
+        prompt_id="code_generation",
+        prompt_variables={"task_description": "add two numbers", "language": "Python"},
+    )
+    result = invoker.invoke(_agent("codex"), task)
+    assert result.output == "ok"
+
+
+def test_prompt_not_allowed_for_agent_propagates_uncaught(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv(ENV_VAR, "sk-ant-test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("should not be called -- prompt resolution must fail first")
+
+    invoker = _invoker_with_handler(
+        handler, prompt_manager=PromptManager(registry=PromptRegistry())
+    )
+    task = AgentTask(
+        task_type="documentation",
+        description="x",
+        prompt_id="code_generation",  # not allowed for claude_code
+        prompt_variables={"task_description": "x"},
+    )
+    with pytest.raises(PromptNotAllowedForAgentError):
+        invoker.invoke(_agent("claude_code"), task)

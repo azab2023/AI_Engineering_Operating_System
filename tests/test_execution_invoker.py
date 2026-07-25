@@ -12,10 +12,16 @@ from pathlib import Path
 
 import pytest
 
-from orchestrator.exceptions import AgentInvocationError, AgentTimeoutError
+from orchestrator.exceptions import (
+    AgentInvocationError,
+    AgentTimeoutError,
+    PromptNotAllowedForAgentError,
+)
 from orchestrator.execution.command_registry import AgentCommandRegistry
 from orchestrator.execution.invoker import SubprocessAgentInvoker
 from orchestrator.models import Agent, AgentCapability, AgentPriority, AgentStatus, AgentTask
+from orchestrator.prompts.prompt_manager import PromptManager
+from orchestrator.prompts.prompt_registry import PromptRegistry
 
 
 def _agent(name: str = "test_agent") -> Agent:
@@ -102,3 +108,66 @@ def test_task_description_is_not_shell_interpreted(tmp_path: Path):
     result = invoker.invoke(_agent(), AgentTask(task_type="test_task", description=dangerous))
 
     assert result.output.strip() == dangerous
+
+
+# --------------------------------------------------------------------- #
+# Phase-08: prompt resolution (ADR-0006 decision 6)
+# --------------------------------------------------------------------- #
+
+
+def test_prompt_id_none_uses_description_unchanged_from_phase07(tmp_path: Path):
+    """Regression guard: when task.prompt_id is None, behavior must be
+    byte-for-byte identical to pre-Phase-08 -- task.description is used
+    as-is, with no PromptManager involvement at all."""
+    registry = _registry_with(
+        tmp_path,
+        "test_agent",
+        [sys.executable, "-c", "import sys; print(sys.argv[1])", "{task_description}"],
+    )
+    invoker = SubprocessAgentInvoker(registry)
+    result = invoker.invoke(_agent(), AgentTask(task_type="test_task", description="hello"))
+
+    assert result.output.strip() == "hello"
+
+
+def test_prompt_id_set_renders_via_prompt_manager(tmp_path: Path):
+    registry = _registry_with(
+        tmp_path,
+        "codex",
+        [sys.executable, "-c", "import sys; print(sys.argv[1])", "{task_description}"],
+    )
+    invoker = SubprocessAgentInvoker(
+        registry, prompt_manager=PromptManager(registry=PromptRegistry())
+    )
+    task = AgentTask(
+        task_type="test_task",
+        description="unused when prompt_id is set",
+        prompt_id="code_generation",
+        prompt_variables={"task_description": "add two numbers", "language": "Python"},
+    )
+    result = invoker.invoke(_agent("codex"), task)
+
+    assert "add two numbers" in result.output
+    assert "Python" in result.output
+
+
+def test_prompt_not_allowed_for_agent_propagates_uncaught(tmp_path: Path):
+    """A prompt/agent mismatch is a configuration error, not a transient
+    failure -- it must propagate out of invoke() unretried, exactly like
+    AgentCommandNotConfiguredError does today."""
+    registry = _registry_with(
+        tmp_path,
+        "gemini",
+        [sys.executable, "-c", "print('should not run')", "{task_description}"],
+    )
+    invoker = SubprocessAgentInvoker(
+        registry, prompt_manager=PromptManager(registry=PromptRegistry())
+    )
+    task = AgentTask(
+        task_type="test_task",
+        description="x",
+        prompt_id="code_generation",  # not allowed for gemini
+        prompt_variables={"task_description": "x"},
+    )
+    with pytest.raises(PromptNotAllowedForAgentError):
+        invoker.invoke(_agent("gemini"), task)

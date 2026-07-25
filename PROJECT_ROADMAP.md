@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v0.7.0**
+Current Version: **v0.8.0**
 
-Current Branch: **phase-07**
+Current Branch: **phase-08**
 
-Last Completed Phase: **Phase-07 – Model Provider Abstraction**
+Last Completed Phase: **Phase-08 – Prompt Management System**
 
 ---
 
@@ -22,6 +22,7 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 | Phase-05 | ✅ | v0.5.0 | Persistence Layer (SQLite + Repository Pattern + CI/CD) |
 | Phase-06 | ✅ | v0.6.0 | Agent Execution Engine (Subprocess AgentInvoker + Retry Policy + ADR-0004) |
 | Phase-07 | ✅ | v0.7.0 | Model Provider Abstraction (ModelProvider Protocol + Anthropic/OpenAI/Gemini adapters + HttpAgentInvoker + ADR-0005) |
+| Phase-08 | ✅ | v0.8.0 | Prompt Management System (PromptRegistry + PromptManager + template rendering + AgentTask.prompt_id + ADR-0006) |
 
 ---
 
@@ -29,7 +30,6 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-08 | ⏳ | Prompt Management System |
 | Phase-09 | ⏳ | Tool Execution Framework |
 | Phase-10 | ⏳ | Memory Management |
 | Phase-11 | ⏳ | Workflow Engine |
@@ -42,7 +42,17 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 
 # Current Focus
 
-**Phase-07 has been implemented and verified** (new `orchestrator/providers/` package — `ModelProvider` Protocol, `ModelProviderRegistry`, `ProviderFactory`, `AnthropicProvider`/`OpenAIProvider`/`GeminiProvider` adapters; new `HttpAgentInvoker` in `orchestrator/execution/` as a second `AgentInvoker` implementation; new `config/model_providers.yaml`; ADR-0005; 202 tests passing Ruff + Pytest, up from 115 at Phase-06 close). Phase-08 has not started.
+**Phase-08 has been implemented and verified** (new `orchestrator/prompts/`
+package — `PromptDefinition`/`PromptVariable`/`RenderedPrompt` models,
+`PromptRenderer` Protocol + `StringTemplateRenderer`, `PromptRegistry`
+with duplicate-top-level-key detection, `PromptManager` Facade; two new
+optional fields on `AgentTask` (`prompt_id`, `prompt_variables`);
+`SubprocessAgentInvoker` and `HttpAgentInvoker` both resolve/render a
+prompt when `task.prompt_id` is set, falling back to `task.description`
+unchanged otherwise; `prompts/prompt_registry.yaml` rewritten with a
+validated schema and 7 populated templates under `prompts/templates/`;
+ADR-0006; 250 tests passing, Ruff check + format clean, up from 202 at
+Phase-07 close). Phase-09 has not started.
 
 **Phase-06 – Agent Execution Engine** objectives (all met):
 
@@ -62,7 +72,15 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 - Configurable enable/disable per provider. ✅ (`enabled: true|false` in `config/model_providers.yaml`, enforced by `ModelProviderRegistry`)
 - Preserve backward compatibility. ✅ (no changes to `ExecutionEngine`, `Orchestrator`, `orchestrator/models.py`, `orchestrator/registry.py`, the `AgentInvoker` Protocol, or `agent_registry.yaml`'s schema)
 
-**Phase-08 – Prompt Management System** (next, pending approval)
+**Phase-08 – Prompt Management System** objectives (all met):
+
+- Versioned, validated prompt assets. ✅ (`PromptRegistry` loads/validates `prompts/prompt_registry.yaml`; each entry has `version`, a disk-verified `template_path`, and a typed `variables` list)
+- Variable substitution with fail-loudly validation. ✅ (`StringTemplateRenderer`; `MissingRequiredVariableError` / `UnknownVariableError`)
+- Fix for the previously-documented duplicate-YAML-key incident. ✅ (`DuplicatePromptKeyError`, raised at registry-load time instead of PyYAML silently keeping the last value)
+- Integration with both invokers without touching `ExecutionEngine`. ✅ (ADR-0006 decision 6 — resolution happens inside `SubprocessAgentInvoker`/`HttpAgentInvoker`, immediately before invocation)
+- Preserve backward compatibility. ✅ (`ExecutionEngine`, `Orchestrator`, `orchestrator/registry.py`, `agent_registry.yaml`'s schema, the `AgentInvoker` Protocol, and `ModelProviderRegistry` all unchanged; `AgentTask`'s two new fields are optional and additive, and all 202 pre-Phase-08 tests remain valid unmodified)
+
+**Phase-09 – Tool Execution Framework** (next, pending approval)
 
 ---
 
@@ -77,6 +95,7 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 | Persistence | ✅ |
 | Execution Engine | ✅ |
 | Model Providers | ✅ |
+| Prompt Management | ✅ |
 | Memory | ⏳ |
 | Security | ⏳ |
 | Production Ready | ⏳ |
@@ -91,6 +110,7 @@ Last Completed Phase: **Phase-07 – Model Provider Abstraction**
 | v0.5.0 | Stable Phase-05 |
 | v0.6.0 | Stable Phase-06 |
 | v0.7.0 | Stable Phase-07 |
+| v0.8.0 | Stable Phase-08 |
 
 ---
 
@@ -123,4 +143,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v0.7.0**
+Current Version: **v0.8.0**

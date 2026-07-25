@@ -44,6 +44,7 @@ from orchestrator.exceptions import (
 from orchestrator.execution.models import ExecutionResult
 from orchestrator.logging_setup import get_logger
 from orchestrator.models import Agent, AgentTask
+from orchestrator.prompts.prompt_manager import PromptManager
 from orchestrator.providers.provider_factory import ProviderFactory
 from orchestrator.providers.provider_registry import ModelProviderRegistry
 
@@ -64,11 +65,28 @@ class HttpAgentInvoker:
         self,
         provider_registry: ModelProviderRegistry | None = None,
         client: httpx.Client | None = None,
+        prompt_manager: PromptManager | None = None,
     ):
         self._provider_registry = provider_registry or ModelProviderRegistry()
         self._client = client
+        self._prompt_manager = prompt_manager
+
+    def _resolve_prompt_text(self, agent: Agent, task: AgentTask) -> str:
+        # Phase-08: if task.prompt_id is set, resolve/render it via
+        # PromptManager and use that text in place of task.description
+        # (see ADR-0006 decision 6). Lazily constructed so existing
+        # callers that never use prompts are unaffected even if
+        # prompts/prompt_registry.yaml is absent or invalid.
+        if task.prompt_id is None:
+            return task.description
+        if self._prompt_manager is None:
+            self._prompt_manager = PromptManager()
+        rendered = self._prompt_manager.render(task.prompt_id, agent.name, task.prompt_variables)
+        return rendered.text
 
     def invoke(self, agent: Agent, task: AgentTask) -> ExecutionResult:
+        prompt_text = self._resolve_prompt_text(agent, task)
+
         # Deliberately not caught here -- ProviderConfigNotFoundError /
         # ProviderDisabledError / UnsupportedProviderTypeError are
         # configuration bugs, not transient failures. See module
@@ -77,7 +95,7 @@ class HttpAgentInvoker:
         provider = ProviderFactory.create(config, client=self._client)
 
         try:
-            response = provider.generate(task.description)
+            response = provider.generate(prompt_text)
         except ProviderTimeoutError as exc:
             logger.warning(
                 "Agent invocation timed out: agent=%s timeout=%.1fs",

@@ -1,6 +1,24 @@
-version: 1.0
-
-system: AEOS Prompt Registry
+# Prompt Registry — Phase-08 (Prompt Management System)
+#
+# Loaded and validated by orchestrator.prompts.PromptRegistry. Each entry
+# must be unique (a duplicate top-level key raises DuplicatePromptKeyError
+# at load time -- see ADR-0006 decision 3) and every template_path must
+# exist on disk relative to this file's directory.
+#
+# Field reference (all required per prompt, except 'variables' which
+# defaults to an empty list if omitted):
+#   category        - grouping label; mirrors templates/<category>/
+#   purpose         - human-readable one-line description
+#   agents          - agent names (must match config/agent_registry.yaml
+#                      identifiers) allowed to use this prompt
+#   priority        - high | medium | low (documentation only this phase)
+#   version         - free-form version string (documentation only this
+#                      phase -- see ADR-0006 Follow-up)
+#   template_path   - path to the template file, relative to this file's
+#                      directory
+#   variables       - list of {name, required, description}. A render
+#                      call must supply every 'required: true' variable
+#                      and may not supply an undeclared one.
 
 prompts:
 
@@ -11,6 +29,15 @@ prompts:
       - claude_code
       - codex
     priority: high
+    version: "1.0"
+    template_path: templates/architecture/architecture_review.md
+    variables:
+      - name: task_description
+        required: true
+        description: What to review.
+      - name: context
+        required: false
+        description: Additional background for the review.
 
   code_generation:
     category: coding
@@ -19,6 +46,15 @@ prompts:
       - codex
       - aider
     priority: high
+    version: "1.0"
+    template_path: templates/coding/code_generation.md
+    variables:
+      - name: task_description
+        required: true
+        description: What code to generate.
+      - name: language
+        required: false
+        description: Target language or stack.
 
   code_refactoring:
     category: coding
@@ -27,6 +63,12 @@ prompts:
       - aider
       - codex
     priority: medium
+    version: "1.0"
+    template_path: templates/coding/code_refactoring.md
+    variables:
+      - name: task_description
+        required: true
+        description: The refactoring goal.
 
   debugging:
     category: debugging
@@ -35,6 +77,15 @@ prompts:
       - codex
       - aider
     priority: high
+    version: "1.0"
+    template_path: templates/debugging/debugging.md
+    variables:
+      - name: task_description
+        required: true
+        description: The error or symptom to debug.
+      - name: context
+        required: false
+        description: Additional relevant context (logs, stack traces).
 
   testing:
     category: testing
@@ -42,6 +93,12 @@ prompts:
     agents:
       - codex
     priority: high
+    version: "1.0"
+    template_path: templates/testing/testing.md
+    variables:
+      - name: task_description
+        required: true
+        description: What needs test coverage.
 
   documentation:
     category: documentation
@@ -50,6 +107,15 @@ prompts:
       - claude_code
       - gemini
     priority: medium
+    version: "1.0"
+    template_path: templates/documentation/documentation.md
+    variables:
+      - name: task_description
+        required: true
+        description: The subject to document.
+      - name: audience
+        required: false
+        description: The intended reader.
 
   automation_design:
     category: automation
@@ -58,3 +124,12 @@ prompts:
       - claude_code
       - gemini
     priority: high
+    version: "1.0"
+    template_path: templates/automation/automation_design.md
+    variables:
+      - name: task_description
+        required: true
+        description: The automation goal.
+      - name: constraints
+        required: false
+        description: Any constraints the design must respect.
