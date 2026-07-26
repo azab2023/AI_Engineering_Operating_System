@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v0.9.0**
+Current Version: **v1.0.0**
 
-Current Branch: **phase-09**
+Current Branch: **phase-10**
 
-Last Completed Phase: **Phase-09 – Tool Execution Framework**
+Last Completed Phase: **Phase-10 – Memory Management**
 
 ---
 
@@ -24,6 +24,7 @@ Last Completed Phase: **Phase-09 – Tool Execution Framework**
 | Phase-07 | ✅ | v0.7.0 | Model Provider Abstraction (ModelProvider Protocol + Anthropic/OpenAI/Gemini adapters + HttpAgentInvoker + ADR-0005) |
 | Phase-08 | ✅ | v0.8.0 | Prompt Management System (PromptRegistry + PromptManager + template rendering + AgentTask.prompt_id + ADR-0006) |
 | Phase-09 | ✅ | v0.9.0 | Tool Execution Framework (Tool Protocol + ToolRegistry + ToolFactory + ToolExecutor + built-in read_file/list_directory tools + ADR-0007) |
+| Phase-10 | ✅ | v1.0.0 | Memory Management (MemoryStore Protocol + InMemoryStore/SQLiteMemoryStore + MemoryManager facade + MemoryEntry model + ADR-0008) |
 
 ---
 
@@ -31,7 +32,6 @@ Last Completed Phase: **Phase-09 – Tool Execution Framework**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-10 | ⏳ | Memory Management |
 | Phase-11 | ⏳ | Workflow Engine |
 | Phase-12 | ⏳ | Security & Permissions |
 | Phase-13 | ⏳ | Monitoring & Observability |
@@ -42,21 +42,60 @@ Last Completed Phase: **Phase-09 – Tool Execution Framework**
 
 # Current Focus
 
-**Phase-09 has been implemented and verified** (new `orchestrator/tools/`
-package -- `ToolParameter`/`ToolDefinition`/`ToolResult` models, `Tool`
-Protocol, `ToolRegistry` (loads/validates `config/tools.yaml`),
-`ToolFactory` (`tool_type` -> implementation, registration-dict based),
-`ToolExecutor` Facade (resolves, validates arguments, runs, wraps
-non-`ToolExecutionError` failures); two built-in, read-only tools
-(`ReadFileTool`, `ListDirectoryTool`) under `orchestrator/tools/builtin/`;
-eight new exceptions under a new `ToolError` base in
-`orchestrator/exceptions.py`; ADR-0007; this phase is deliberately
+**Phase-10 has been implemented and verified** (new `orchestrator/memory/`
+package -- `MemoryEntry` model, `MemoryStore` Protocol, `InMemoryStore`
+(Working Memory) and `SQLiteMemoryStore` (Persistent Memory, reusing
+`orchestrator/persistence/db.py`'s connection setup and adding its own
+additive `memory_entries` table via `orchestrator/memory/schema.py`),
+and `MemoryManager` Facade (`remember`/`recall`/`forget`/`list`,
+upsert semantics on top of the store's `add`/`update`); three new
+exceptions under a new `MemoryManagementError` base in
+`orchestrator/exceptions.py`; ADR-0008; this phase is deliberately
 self-contained -- `AgentTask`, `Orchestrator`, `ExecutionEngine`, both
 `AgentInvoker` implementations, `AgentRegistry`, `ModelProviderRegistry`,
-and `PromptManager` are all unchanged, and `ToolExecutor` has no caller
-yet (see ADR-0007 decision 6; expected to be consumed by the future
-Phase-11 Workflow Engine); 303 tests passing, Ruff check + format
-clean, up from 250 at Phase-08 close). Phase-10 has not started.
+`PromptManager`, and `ToolExecutor` are all unchanged, and
+`MemoryManager` has no caller yet (see ADR-0008 decision 7; expected to
+be consumed by the future Phase-11 Workflow Engine, alongside
+`ToolExecutor`); no semantic memory, embeddings, vector databases, or
+similarity search were implemented (out of approved scope, see
+ADR-0008); 338 tests passing, Ruff check + format clean, up from 303 at
+Phase-09 close. Phase-11 has not started.
+
+**Phase-09 – Tool Execution Framework** objectives (all met):
+
+- Discrete, named, config-driven tools, independent of any agent's
+  CLI/API session. ✅ (`orchestrator/tools/` -- `Tool` Protocol,
+  `ToolRegistry` loading `config/tools.yaml`)
+- Open/Closed tool extensibility. ✅ (`ToolFactory` registration dict;
+  ADR-0007 decision 4)
+- Fail-loudly argument validation before any tool runs. ✅
+  (`ToolExecutor._validate_arguments()`)
+- Configurable enable/disable per tool. ✅ (`enabled: true|false` in
+  `config/tools.yaml`)
+- Minimal, safe built-in tools only. ✅ (`ReadFileTool`,
+  `ListDirectoryTool`)
+- Preserve backward compatibility. ✅ (see ADR-0007 decision 6)
+
+**Phase-10 – Memory Management** objectives (all met):
+
+- Working Memory (in-process, ephemeral) and Persistent Memory
+  (durable across restarts) only -- no semantic memory, embeddings,
+  vector databases, or similarity search. ✅ (`InMemoryStore`,
+  `SQLiteMemoryStore`; ADR-0008 context)
+- Open/Closed backend extensibility via a Port, not an `if/elif`
+  chain. ✅ (`MemoryStore` Protocol; ADR-0008 decision 2)
+- Reuse the existing persistence architecture (Repository Pattern,
+  SQLite backend, InMemory implementation) rather than a new
+  persistence framework. ✅ (`SQLiteMemoryStore` reuses
+  `persistence.db.connect()`; ADR-0008 decision 4)
+- A single Facade, matching `PromptManager`/`ToolExecutor`'s
+  architectural style. ✅ (`MemoryManager.remember/recall/forget/list`;
+  ADR-0008 decision 5)
+- Preserve backward compatibility. ✅ (no changes to `AgentTask`,
+  `Orchestrator`, `ExecutionEngine`, either `AgentInvoker`,
+  `AgentRegistry`, `ModelProviderRegistry`, `PromptManager`,
+  `ToolExecutor`, or `orchestrator/persistence/schema.py`; ADR-0008
+  decision 7)
 
 **Phase-06 – Agent Execution Engine** objectives (all met):
 
@@ -108,7 +147,7 @@ clean, up from 250 at Phase-08 close). Phase-10 has not started.
 | Model Providers | ✅ |
 | Prompt Management | ✅ |
 | Tool Execution | ✅ |
-| Memory | ⏳ |
+| Memory | ✅ |
 | Security | ⏳ |
 | Production Ready | ⏳ |
 
@@ -124,6 +163,7 @@ clean, up from 250 at Phase-08 close). Phase-10 has not started.
 | v0.7.0 | Stable Phase-07 |
 | v0.8.0 | Stable Phase-08 |
 | v0.9.0 | Stable Phase-09 |
+| v1.0.0 | Stable Phase-10 |
 
 ---
 
@@ -156,4 +196,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v0.8.0**
+Current Version: **v1.0.0**

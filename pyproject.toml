@@ -1,6 +1,6 @@
 [project]
 name = "aeos"
-version = "0.9.0"
+version = "1.0.0"
 description = "AI Engineering Operating System (AEOS) - orchestration and persistence layer for managing multiple AI coding agents."
 requires-python = ">=3.11"
 readme = "README.md"

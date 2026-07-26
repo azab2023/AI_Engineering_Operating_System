@@ -411,6 +411,48 @@ class ToolExecutionError(ToolError):
         super().__init__(f"Tool {tool_name!r} failed: {reason}")
 
 
+class MemoryManagementError(OrchestratorError):
+    """Base class for all Phase-10 memory-management-layer errors.
+
+    Named ``MemoryManagementError`` rather than ``MemoryError`` to avoid
+    shadowing the Python builtin ``MemoryError``, matching the
+    ``PromptManagementError`` (Phase-08) naming convention. Distinct from
+    ``PersistenceError`` (Phase-05, ``AgentExecution`` storage) and
+    ``ToolError`` (Phase-09): these originate from a ``MemoryStore``
+    Port/adapter storing or retrieving a ``MemoryEntry``, not from
+    execution-state storage or tool execution. Phase-10 does not wire
+    this hierarchy into ``AgentTask``, ``ExecutionEngine``, or
+    ``ToolExecutor`` -- see ADR-0008 decision 7.
+    """
+
+
+class MemoryEntryNotFoundError(MemoryManagementError):
+    """Raised when no entry exists for a given ``(key, scope)`` pair on
+    ``MemoryStore.get()`` / ``update()`` / ``delete()``."""
+
+    def __init__(self, key: str, scope: str):
+        self.key = key
+        self.scope = scope
+        super().__init__(f"No memory entry found for key={key!r} scope={scope!r}")
+
+
+class MemoryEntryAlreadyExistsError(MemoryManagementError):
+    """Raised by ``MemoryStore.add()`` when an entry already exists for
+    the given ``(key, scope)`` pair. Mirrors
+    ``ExecutionAlreadyExistsError`` (Phase-05)."""
+
+    def __init__(self, key: str, scope: str):
+        self.key = key
+        self.scope = scope
+        super().__init__(f"Memory entry already exists for key={key!r} scope={scope!r}")
+
+
+class MemorySerializationError(MemoryManagementError):
+    """Raised when a ``MemoryEntry`` cannot be reconstructed from a
+    ``SQLiteMemoryStore`` row (e.g. non-JSON ``metadata``). Mirrors
+    ``ExecutionSerializationError`` (Phase-05)."""
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.
