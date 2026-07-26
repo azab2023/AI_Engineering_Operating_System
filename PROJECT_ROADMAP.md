@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v1.0.0**
+Current Version: **v1.1.0**
 
-Current Branch: **phase-10**
+Current Branch: **phase-11**
 
-Last Completed Phase: **Phase-10 – Memory Management**
+Last Completed Phase: **Phase-11 – Workflow Engine**
 
 ---
 
@@ -25,6 +25,7 @@ Last Completed Phase: **Phase-10 – Memory Management**
 | Phase-08 | ✅ | v0.8.0 | Prompt Management System (PromptRegistry + PromptManager + template rendering + AgentTask.prompt_id + ADR-0006) |
 | Phase-09 | ✅ | v0.9.0 | Tool Execution Framework (Tool Protocol + ToolRegistry + ToolFactory + ToolExecutor + built-in read_file/list_directory tools + ADR-0007) |
 | Phase-10 | ✅ | v1.0.0 | Memory Management (MemoryStore Protocol + InMemoryStore/SQLiteMemoryStore + MemoryManager facade + MemoryEntry model + ADR-0008) |
+| Phase-11 | ✅ | v1.1.0 | Workflow Engine (WorkflowRegistry + WorkflowRunRepository + WorkflowEngine facade composing Orchestrator/ExecutionEngine + ToolExecutor + ADR-0009) |
 
 ---
 
@@ -32,7 +33,6 @@ Last Completed Phase: **Phase-10 – Memory Management**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-11 | ⏳ | Workflow Engine |
 | Phase-12 | ⏳ | Security & Permissions |
 | Phase-13 | ⏳ | Monitoring & Observability |
 | Phase-14 | ⏳ | Plugin & Extension System |
@@ -42,24 +42,46 @@ Last Completed Phase: **Phase-10 – Memory Management**
 
 # Current Focus
 
-**Phase-10 has been implemented and verified** (new `orchestrator/memory/`
-package -- `MemoryEntry` model, `MemoryStore` Protocol, `InMemoryStore`
-(Working Memory) and `SQLiteMemoryStore` (Persistent Memory, reusing
-`orchestrator/persistence/db.py`'s connection setup and adding its own
-additive `memory_entries` table via `orchestrator/memory/schema.py`),
-and `MemoryManager` Facade (`remember`/`recall`/`forget`/`list`,
-upsert semantics on top of the store's `add`/`update`); three new
-exceptions under a new `MemoryManagementError` base in
-`orchestrator/exceptions.py`; ADR-0008; this phase is deliberately
-self-contained -- `AgentTask`, `Orchestrator`, `ExecutionEngine`, both
-`AgentInvoker` implementations, `AgentRegistry`, `ModelProviderRegistry`,
-`PromptManager`, and `ToolExecutor` are all unchanged, and
-`MemoryManager` has no caller yet (see ADR-0008 decision 7; expected to
-be consumed by the future Phase-11 Workflow Engine, alongside
-`ToolExecutor`); no semantic memory, embeddings, vector databases, or
-similarity search were implemented (out of approved scope, see
-ADR-0008); 338 tests passing, Ruff check + format clean, up from 303 at
-Phase-09 close. Phase-11 has not started.
+**Phase-11 has been implemented and verified** (new
+`orchestrator/workflow/` package -- `StepType` / `WorkflowStep` /
+`WorkflowDefinition` / `WorkflowRunState` / `WorkflowRun` models,
+`WorkflowRegistry` loading/validating the new `config/workflows.yaml`,
+`WorkflowRunRepository` Protocol + `InMemoryWorkflowRunRepository`, and
+`WorkflowEngine` Facade (`start`/`resume`/`get_run`/`list_runs`)); six
+new exceptions under a new `WorkflowError` base in
+`orchestrator/exceptions.py`; ADR-0009. This is the first phase to
+actually call `ToolExecutor` (ADR-0007 decision 6) and to exercise the
+human-approval pause/resume path for `agent_task` steps, structurally
+reusing `Orchestrator.approve()` unmodified rather than introducing a
+new approval mechanism; `MemoryManager` is not wired into this phase's
+step vocabulary (deferred, see ADR-0009 Follow-up). `AgentTask`,
+`Orchestrator`, `ExecutionEngine`, both `AgentInvoker` implementations,
+`AgentRegistry`, `ModelProviderRegistry`, `PromptManager`,
+`ToolExecutor`, and `MemoryManager` are all unchanged by this phase.
+Implementation is deliberately minimal and linear -- exactly two step
+kinds (`agent_task`, `tool_call`), no branching, no parallel steps, no
+workflow-level retry, and no SQLite-backed run persistence yet (see
+ADR-0009 Alternatives/Follow-up); 391 tests passing, Ruff check +
+format clean, up from 338 at Phase-10 close. Phase-12 has not started.
+
+**Phase-11 – Workflow Engine** objectives (all met):
+
+- Compose existing components (`Orchestrator`/`ExecutionEngine`,
+  `ToolExecutor`) into a named, ordered, linear sequence of steps. ✅
+  (`orchestrator/workflow/` -- `WorkflowEngine.start()`/`resume()`,
+  `WorkflowRegistry` loading `config/workflows.yaml`)
+- Exactly two step kinds, config-driven, minimal scope. ✅
+  (`StepType.AGENT_TASK` / `StepType.TOOL_CALL`; ADR-0009 decision 2)
+- Preserve human-in-the-loop approval for every `agent_task` step,
+  with no new approval mechanism. ✅ (`WorkflowRun` pauses at
+  `AWAITING_APPROVAL`; `resume()` requires `Orchestrator.approve()` to
+  have already been called; ADR-0009 decision 4)
+- Close the "no caller yet" status ADR-0007 decision 6 left open for
+  `ToolExecutor`. ✅ (`WorkflowEngine._run_tool_step()`)
+- Preserve backward compatibility. ✅ (`AgentTask`, `Orchestrator`,
+  `ExecutionEngine`, both `AgentInvoker` implementations,
+  `AgentRegistry`, `ModelProviderRegistry`, `PromptManager`,
+  `ToolExecutor`, and `MemoryManager` all unchanged; ADR-0009 decision 3)
 
 **Phase-09 – Tool Execution Framework** objectives (all met):
 
@@ -148,6 +170,7 @@ Phase-09 close. Phase-11 has not started.
 | Prompt Management | ✅ |
 | Tool Execution | ✅ |
 | Memory | ✅ |
+| Workflow Engine | ✅ |
 | Security | ⏳ |
 | Production Ready | ⏳ |
 
@@ -164,6 +187,7 @@ Phase-09 close. Phase-11 has not started.
 | v0.8.0 | Stable Phase-08 |
 | v0.9.0 | Stable Phase-09 |
 | v1.0.0 | Stable Phase-10 |
+| v1.1.0 | Stable Phase-11 |
 
 ---
 
@@ -196,4 +220,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v1.0.0**
+Current Version: **v1.1.0**

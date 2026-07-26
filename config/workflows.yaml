@@ -1,0 +1,51 @@
+# Workflow Configuration — Phase-11 (Workflow Engine)
+#
+# Each top-level key under `workflows` is a workflow_id that
+# WorkflowEngine / WorkflowRegistry resolve at lookup time. This is
+# additive: it does not modify agent_registry.yaml, model_providers.yaml,
+# prompt_registry.yaml, or tools.yaml, and nothing outside the new
+# orchestrator/workflow/ package depends on this file existing (see
+# ADR-0009 decision 3).
+#
+# Field reference:
+#   description   - human-readable purpose, documentation only.
+#   steps         - ordered list of steps, run linearly, one at a time.
+#                    Each entry:
+#                      step_id                - unique within the workflow
+#                      step_type               - "agent_task" | "tool_call"
+#
+#                      # required when step_type: agent_task
+#                      task_type                 - routed via the existing
+#                                                    AgentRegistry/Orchestrator
+#                      description                - the AgentTask description
+#                      required_capabilities        - optional list of
+#                                                       capability names
+#                      prompt_id                      - optional, resolved via
+#                                                         the existing PromptManager
+#                      prompt_variables                 - optional mapping
+#
+#                      # required when step_type: tool_call
+#                      tool_name                          - routed via the
+#                                                             existing ToolExecutor
+#                      tool_arguments                       - optional mapping
+
+workflows:
+
+  read_file_and_summarize:
+    description: >-
+      Reads one file via the existing read_file tool, then hands its
+      contents to an agent for a documentation-style summary. A working
+      example of a linear, two-step workflow mixing both step types.
+    steps:
+      - step_id: read_source_file
+        step_type: tool_call
+        tool_name: read_file
+        tool_arguments:
+          path: "README.md"
+
+      - step_id: summarize_contents
+        step_type: agent_task
+        task_type: documentation
+        description: "Summarize the file contents read in the previous step."
+        required_capabilities:
+          - documentation

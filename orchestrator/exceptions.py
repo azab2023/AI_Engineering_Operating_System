@@ -453,6 +453,83 @@ class MemorySerializationError(MemoryManagementError):
     ``ExecutionSerializationError`` (Phase-05)."""
 
 
+class WorkflowError(OrchestratorError):
+    """Base class for all Phase-11 workflow-engine-layer errors.
+
+    Distinct from ``ToolError`` (Phase-09) and ``MemoryManagementError``
+    (Phase-10): these originate from ``orchestrator.workflow`` composing
+    the ``Orchestrator``/``ExecutionEngine``/``ToolExecutor`` boundary,
+    not from a single component's own internals. See ADR-0009.
+    """
+
+
+class WorkflowRegistryError(WorkflowError):
+    """Raised when ``config/workflows.yaml`` cannot be loaded or fails
+    validation. Mirrors ``ToolRegistryError`` (Phase-09)."""
+
+
+class WorkflowNotFoundError(WorkflowError):
+    """Raised when no entry exists for a given ``workflow_id`` in the
+    ``WorkflowRegistry``."""
+
+    def __init__(self, workflow_id: str):
+        self.workflow_id = workflow_id
+        super().__init__(f"No workflow found for workflow_id={workflow_id!r}")
+
+
+class UnknownWorkflowRunError(WorkflowError):
+    """Raised when no ``WorkflowRun`` exists for a given ``run_id`` in the
+    ``WorkflowRunRepository``. Mirrors ``UnknownExecutionError``
+    (Phase-05)."""
+
+    def __init__(self, run_id: str):
+        self.run_id = run_id
+        super().__init__(f"No workflow run found for run_id={run_id!r}")
+
+
+class WorkflowRunAlreadyExistsError(WorkflowError):
+    """Raised by ``WorkflowRunRepository.add()`` when a run already exists
+    for the given ``run_id``. Mirrors ``ExecutionAlreadyExistsError``
+    (Phase-05)."""
+
+    def __init__(self, run_id: str):
+        self.run_id = run_id
+        super().__init__(f"Workflow run already exists for run_id={run_id!r}")
+
+
+class InvalidWorkflowStateTransitionError(WorkflowError):
+    """Raised when a ``WorkflowEngine`` method is called on a run whose
+    current state does not permit that action. Mirrors
+    ``InvalidStateTransitionError`` (Phase-04)."""
+
+    def __init__(self, run_id: str, action: str, expected_state: str, actual_state: str):
+        self.run_id = run_id
+        self.action = action
+        self.expected_state = expected_state
+        self.actual_state = actual_state
+        super().__init__(
+            f"Cannot {action} workflow run {run_id!r}: requires state "
+            f"{expected_state!r}, but current state is {actual_state!r}"
+        )
+
+
+class WorkflowStepNotApprovedError(WorkflowError):
+    """Raised by ``WorkflowEngine.resume()`` when the pending
+    ``AgentExecution`` for the current ``agent_task`` step has not yet
+    reached ``COMPLETED`` (i.e. ``Orchestrator.approve()`` has not been
+    called on it yet). See ADR-0009 decision 4."""
+
+    def __init__(self, run_id: str, execution_id: str, actual_state: str):
+        self.run_id = run_id
+        self.execution_id = execution_id
+        self.actual_state = actual_state
+        super().__init__(
+            f"Cannot resume workflow run {run_id!r}: pending execution "
+            f"{execution_id!r} is not yet approved (current state: "
+            f"{actual_state!r})"
+        )
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.
