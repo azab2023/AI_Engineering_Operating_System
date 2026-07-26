@@ -312,6 +312,105 @@ class UnknownVariableError(PromptManagementError):
         super().__init__(f"Prompt {prompt_id!r} was given undeclared variable {variable_name!r}")
 
 
+class ToolError(OrchestratorError):
+    """Base class for all Phase-09 tool-execution-framework errors.
+
+    Distinct from ``ExecutionEngineError`` (Phase-06 CLI invocation),
+    ``ModelProviderError`` (Phase-07 HTTP provider calls), and
+    ``PromptManagementError`` (Phase-08 prompt resolution/rendering):
+    these originate from resolving, validating, or running a ``Tool``,
+    not from any agent-invocation path. Phase-09 does not wire this
+    hierarchy into ``AgentTask``, ``ExecutionEngine``, or either
+    ``AgentInvoker`` -- see ADR-0007 decision 6.
+    """
+
+
+class ToolRegistryError(ToolError):
+    """Raised when ``config/tools.yaml`` cannot be loaded or fails
+    validation. Mirrors ``ModelProviderRegistryError``'s (Phase-07)
+    fail-loudly philosophy."""
+
+
+class ToolNotFoundError(ToolError):
+    """Raised when a requested ``tool_name`` has no entry in the tool
+    registry."""
+
+    def __init__(self, tool_name: str):
+        self.tool_name = tool_name
+        super().__init__(f"No tool found with name={tool_name!r}")
+
+
+class ToolDisabledError(ToolError):
+    """Raised when the entry for ``tool_name`` in ``config/tools.yaml``
+    has ``enabled: false``. A configuration state, not a transient
+    failure -- mirrors ``ProviderDisabledError`` (Phase-07)."""
+
+    def __init__(self, tool_name: str):
+        self.tool_name = tool_name
+        super().__init__(f"Tool {tool_name!r} is disabled")
+
+
+class UnsupportedToolTypeError(ToolError):
+    """Raised by ``ToolFactory`` when a ``ToolDefinition.tool_type`` has
+    no registered ``Tool`` adapter. A configuration/wiring bug, mirrors
+    ``UnsupportedProviderTypeError`` (Phase-07)."""
+
+    def __init__(self, tool_type: str):
+        self.tool_type = tool_type
+        super().__init__(f"No Tool implementation registered for tool_type {tool_type!r}")
+
+
+class MissingRequiredArgumentError(ToolError):
+    """Raised when ``ToolExecutor.execute()`` is called without a value
+    for an argument declared ``required: true`` in the tool's
+    definition. Mirrors ``MissingRequiredVariableError`` (Phase-08)."""
+
+    def __init__(self, tool_name: str, argument_name: str):
+        self.tool_name = tool_name
+        self.argument_name = argument_name
+        super().__init__(f"Tool {tool_name!r} is missing required argument {argument_name!r}")
+
+
+class UnknownArgumentError(ToolError):
+    """Raised when ``ToolExecutor.execute()`` is supplied an argument
+    that is not declared in the tool's definition. Rejected rather than
+    silently ignored, per the project's fail-loudly philosophy. Mirrors
+    ``UnknownVariableError`` (Phase-08)."""
+
+    def __init__(self, tool_name: str, argument_name: str):
+        self.tool_name = tool_name
+        self.argument_name = argument_name
+        super().__init__(f"Tool {tool_name!r} was given undeclared argument {argument_name!r}")
+
+
+class InvalidArgumentTypeError(ToolError):
+    """Raised when an argument's runtime value does not match its
+    declared ``type`` (``string`` | ``number`` | ``boolean``)."""
+
+    def __init__(
+        self, tool_name: str, argument_name: str, expected_type: str, actual_value: object
+    ):
+        self.tool_name = tool_name
+        self.argument_name = argument_name
+        self.expected_type = expected_type
+        super().__init__(
+            f"Tool {tool_name!r} argument {argument_name!r} must be of type "
+            f"{expected_type!r}, got {type(actual_value).__name__}"
+        )
+
+
+class ToolExecutionError(ToolError):
+    """Raised when a ``Tool`` implementation's ``execute()`` fails for
+    any reason specific to that tool (e.g. file not found, permission
+    denied) -- as distinct from the configuration/validation errors
+    above, which are raised before a tool ever runs."""
+
+    def __init__(self, tool_name: str, reason: str):
+        self.tool_name = tool_name
+        self.reason = reason
+        super().__init__(f"Tool {tool_name!r} failed: {reason}")
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.

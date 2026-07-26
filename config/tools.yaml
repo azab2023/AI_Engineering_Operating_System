@@ -1,0 +1,45 @@
+# Tool Configuration — Phase-09 (Tool Execution Framework)
+#
+# Each top-level key under `tools` is a tool_name that ToolExecutor /
+# ToolRegistry resolve at lookup time. This is additive: it does not
+# modify agent_registry.yaml, model_providers.yaml, or
+# prompt_registry.yaml, and nothing outside the new orchestrator/tools/
+# package depends on this file existing (see ADR-0007 decision 6).
+#
+# Field reference:
+#   tool_type     - which Tool implementation to use. One of the
+#                    implementations registered in ToolFactory (e.g.
+#                    "read_file", "list_directory"); see ADR-0007
+#                    decision 4 for how a new tool_type is added without
+#                    modifying ToolExecutor.
+#   enabled        - true|false. A disabled entry is treated as a
+#                    configuration error (ToolDisabledError) at lookup
+#                    time.
+#   description     - human-readable purpose, documentation only.
+#   parameters        - list of arguments execute() accepts. Each entry:
+#                          name        - argument key
+#                          type        - "string" | "number" | "boolean"
+#                          required    - true|false
+#                          description - documentation only
+
+tools:
+
+  read_file:
+    tool_type: read_file
+    enabled: true
+    description: "Read the full text contents of one file on disk."
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: "Path to the file to read."
+
+  list_directory:
+    tool_type: list_directory
+    enabled: true
+    description: "List the immediate entries of one directory on disk."
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: "Path to the directory to list."

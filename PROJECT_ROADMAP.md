@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v0.8.0**
+Current Version: **v0.9.0**
 
-Current Branch: **phase-08**
+Current Branch: **phase-09**
 
-Last Completed Phase: **Phase-08 – Prompt Management System**
+Last Completed Phase: **Phase-09 – Tool Execution Framework**
 
 ---
 
@@ -23,6 +23,7 @@ Last Completed Phase: **Phase-08 – Prompt Management System**
 | Phase-06 | ✅ | v0.6.0 | Agent Execution Engine (Subprocess AgentInvoker + Retry Policy + ADR-0004) |
 | Phase-07 | ✅ | v0.7.0 | Model Provider Abstraction (ModelProvider Protocol + Anthropic/OpenAI/Gemini adapters + HttpAgentInvoker + ADR-0005) |
 | Phase-08 | ✅ | v0.8.0 | Prompt Management System (PromptRegistry + PromptManager + template rendering + AgentTask.prompt_id + ADR-0006) |
+| Phase-09 | ✅ | v0.9.0 | Tool Execution Framework (Tool Protocol + ToolRegistry + ToolFactory + ToolExecutor + built-in read_file/list_directory tools + ADR-0007) |
 
 ---
 
@@ -30,7 +31,6 @@ Last Completed Phase: **Phase-08 – Prompt Management System**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-09 | ⏳ | Tool Execution Framework |
 | Phase-10 | ⏳ | Memory Management |
 | Phase-11 | ⏳ | Workflow Engine |
 | Phase-12 | ⏳ | Security & Permissions |
@@ -42,17 +42,21 @@ Last Completed Phase: **Phase-08 – Prompt Management System**
 
 # Current Focus
 
-**Phase-08 has been implemented and verified** (new `orchestrator/prompts/`
-package — `PromptDefinition`/`PromptVariable`/`RenderedPrompt` models,
-`PromptRenderer` Protocol + `StringTemplateRenderer`, `PromptRegistry`
-with duplicate-top-level-key detection, `PromptManager` Facade; two new
-optional fields on `AgentTask` (`prompt_id`, `prompt_variables`);
-`SubprocessAgentInvoker` and `HttpAgentInvoker` both resolve/render a
-prompt when `task.prompt_id` is set, falling back to `task.description`
-unchanged otherwise; `prompts/prompt_registry.yaml` rewritten with a
-validated schema and 7 populated templates under `prompts/templates/`;
-ADR-0006; 250 tests passing, Ruff check + format clean, up from 202 at
-Phase-07 close). Phase-09 has not started.
+**Phase-09 has been implemented and verified** (new `orchestrator/tools/`
+package -- `ToolParameter`/`ToolDefinition`/`ToolResult` models, `Tool`
+Protocol, `ToolRegistry` (loads/validates `config/tools.yaml`),
+`ToolFactory` (`tool_type` -> implementation, registration-dict based),
+`ToolExecutor` Facade (resolves, validates arguments, runs, wraps
+non-`ToolExecutionError` failures); two built-in, read-only tools
+(`ReadFileTool`, `ListDirectoryTool`) under `orchestrator/tools/builtin/`;
+eight new exceptions under a new `ToolError` base in
+`orchestrator/exceptions.py`; ADR-0007; this phase is deliberately
+self-contained -- `AgentTask`, `Orchestrator`, `ExecutionEngine`, both
+`AgentInvoker` implementations, `AgentRegistry`, `ModelProviderRegistry`,
+and `PromptManager` are all unchanged, and `ToolExecutor` has no caller
+yet (see ADR-0007 decision 6; expected to be consumed by the future
+Phase-11 Workflow Engine); 303 tests passing, Ruff check + format
+clean, up from 250 at Phase-08 close). Phase-10 has not started.
 
 **Phase-06 – Agent Execution Engine** objectives (all met):
 
@@ -80,7 +84,14 @@ Phase-07 close). Phase-09 has not started.
 - Integration with both invokers without touching `ExecutionEngine`. ✅ (ADR-0006 decision 6 — resolution happens inside `SubprocessAgentInvoker`/`HttpAgentInvoker`, immediately before invocation)
 - Preserve backward compatibility. ✅ (`ExecutionEngine`, `Orchestrator`, `orchestrator/registry.py`, `agent_registry.yaml`'s schema, the `AgentInvoker` Protocol, and `ModelProviderRegistry` all unchanged; `AgentTask`'s two new fields are optional and additive, and all 202 pre-Phase-08 tests remain valid unmodified)
 
-**Phase-09 – Tool Execution Framework** (next, pending approval)
+**Phase-09 – Tool Execution Framework** objectives (all met):
+
+- Discrete, named, config-driven tools, independent of any agent's CLI/API session. ✅ (`orchestrator/tools/` -- `Tool` Protocol, `ToolRegistry` loading `config/tools.yaml`)
+- Open/Closed tool extensibility. ✅ (`ToolFactory` registration dict; ADR-0007 decision 4 -- a new built-in tool needs one new implementation class + one new config entry, zero changes to `ToolExecutor` or `ToolRegistry`)
+- Fail-loudly argument validation before any tool runs. ✅ (`ToolExecutor._validate_arguments()` -- `MissingRequiredArgumentError` / `UnknownArgumentError` / `InvalidArgumentTypeError`)
+- Configurable enable/disable per tool. ✅ (`enabled: true|false` in `config/tools.yaml`, enforced by `ToolRegistry`)
+- Minimal, safe built-in tools only -- no shell execution, no MCP integration. ✅ (`ReadFileTool`, `ListDirectoryTool`; both read-only, non-recursive, local-filesystem only)
+- Preserve backward compatibility. ✅ (no changes to `AgentTask`, `Orchestrator`, `ExecutionEngine`, `SubprocessAgentInvoker`, `HttpAgentInvoker`, `orchestrator/registry.py`, `ModelProviderRegistry`, or `PromptManager`; see ADR-0007 decision 6)
 
 ---
 
@@ -96,6 +107,7 @@ Phase-07 close). Phase-09 has not started.
 | Execution Engine | ✅ |
 | Model Providers | ✅ |
 | Prompt Management | ✅ |
+| Tool Execution | ✅ |
 | Memory | ⏳ |
 | Security | ⏳ |
 | Production Ready | ⏳ |
@@ -111,6 +123,7 @@ Phase-07 close). Phase-09 has not started.
 | v0.6.0 | Stable Phase-06 |
 | v0.7.0 | Stable Phase-07 |
 | v0.8.0 | Stable Phase-08 |
+| v0.9.0 | Stable Phase-09 |
 
 ---
 
