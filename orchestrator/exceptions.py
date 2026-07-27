@@ -608,3 +608,39 @@ class InvalidStateTransitionError(OrchestratorError):
             f"Cannot {action} execution {execution_id!r}: requires state "
             f"{expected_state!r}, but current state is {actual_state!r}"
         )
+
+
+class ObservabilityError(OrchestratorError):
+    """Base class for all Phase-13 monitoring-and-observability errors.
+
+    Distinct from every other hierarchy above: these originate from
+    ``orchestrator.observability`` -- recording/config-loading for
+    structured events and metrics -- not from any agent-invocation,
+    tool, or workflow path. Integrated components
+    (``Orchestrator``/``ExecutionEngine``/``ToolExecutor``/
+    ``WorkflowEngine``) never raise these themselves; they only ever
+    reach an ``ObservabilityRecorder`` through the optional ``observer``
+    parameter added in this phase. See ADR-0011.
+    """
+
+
+class ObservabilityRegistryError(ObservabilityError):
+    """Raised when ``config/observability.yaml`` cannot be loaded or
+    fails validation. Mirrors ``PermissionRegistryError`` (Phase-12)."""
+
+
+class InvalidMetricTypeError(ObservabilityError):
+    """Raised by ``InMemoryRecorder.record_metric()`` when a
+    ``MetricPoint.metric_type`` is not one of the supported values
+    (``"counter"`` | ``"timer"``). None of this phase's own integrated
+    call sites can trigger this -- it exists to fail loudly on a future
+    coding mistake rather than any input reachable through normal use.
+    """
+
+    def __init__(self, metric_name: str, metric_type: str):
+        self.metric_name = metric_name
+        self.metric_type = metric_type
+        super().__init__(
+            f"Metric {metric_name!r} has unsupported metric_type={metric_type!r}; "
+            "expected 'counter' or 'timer'"
+        )

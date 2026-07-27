@@ -59,6 +59,8 @@ from orchestrator.models import (
     AgentTask,
     ExecutionState,
 )
+from orchestrator.observability.models import MetricPoint, ObservabilityEvent
+from orchestrator.observability.recorder import ObservabilityRecorder
 from orchestrator.persistence.repository import (
     ExecutionRepository,
     InMemoryExecutionRepository,
@@ -92,9 +94,31 @@ class Orchestrator:
         self,
         registry: AgentRegistry,
         repository: ExecutionRepository | None = None,
+        observer: ObservabilityRecorder | None = None,
     ):
         self._registry = registry
         self._repository = repository if repository is not None else InMemoryExecutionRepository()
+        self._observer = observer
+
+    # ------------------------------------------------------------------ #
+    # Phase-13 (ADR-0011) observability helper
+    # ------------------------------------------------------------------ #
+
+    def _observe_event(self, event_type: str, **attributes: str) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_event(
+            ObservabilityEvent(
+                component="orchestrator", event_type=event_type, attributes=attributes
+            )
+        )
+
+    def _observe_metric(self, name: str, value: float, metric_type: str, **tags: str) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_metric(
+            MetricPoint(name=name, value=value, metric_type=metric_type, tags=tags)
+        )
 
     # ------------------------------------------------------------------ #
     # Public workflow
@@ -174,6 +198,10 @@ class Orchestrator:
             execution.touch()
             self._repository.update(execution)
             logger.warning("Routing failed for execution_id=%s: %s", execution.execution_id, exc)
+            self._observe_event(
+                "route_failed", execution_id=execution.execution_id, reason=str(exc)
+            )
+            self._observe_metric("orchestrator.routes_total", 1, "counter", outcome="failed")
             raise
 
         execution.assigned_agent = agent
@@ -195,6 +223,10 @@ class Orchestrator:
             agent.name,
             execution.state.value,
         )
+        self._observe_event(
+            "task_routed", execution_id=execution.execution_id, agent_name=agent.name
+        )
+        self._observe_metric("orchestrator.routes_total", 1, "counter", outcome="success")
         return execution
 
     def mark_awaiting_approval(self, execution_id: str, result: str) -> AgentExecution:
@@ -215,6 +247,7 @@ class Orchestrator:
         execution.touch()
         self._repository.update(execution)
         logger.info("Execution awaiting approval: execution_id=%s", execution_id)
+        self._observe_event("execution_awaiting_approval", execution_id=execution_id)
         return execution
 
     def approve(self, execution_id: str) -> AgentExecution:
@@ -237,6 +270,7 @@ class Orchestrator:
         execution.touch()
         self._repository.update(execution)
         logger.info("Execution approved and completed: execution_id=%s", execution_id)
+        self._observe_event("execution_approved", execution_id=execution_id)
         return execution
 
     def mark_failed(self, execution_id: str, error: str) -> AgentExecution:
@@ -261,6 +295,7 @@ class Orchestrator:
         execution.touch()
         self._repository.update(execution)
         logger.warning("Execution failed: execution_id=%s error=%s", execution_id, error)
+        self._observe_event("execution_failed", execution_id=execution_id, error=error)
         return execution
 
     def track(self, execution_id: str) -> AgentExecution:

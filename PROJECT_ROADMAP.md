@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v1.2.0**
+Current Version: **v1.3.0**
 
-Current Branch: **phase-12**
+Current Branch: **phase-13**
 
-Last Completed Phase: **Phase-12 – Security & Permissions**
+Last Completed Phase: **Phase-13 – Monitoring & Observability**
 
 ---
 
@@ -27,6 +27,7 @@ Last Completed Phase: **Phase-12 – Security & Permissions**
 | Phase-10 | ✅ | v1.0.0 | Memory Management (MemoryStore Protocol + InMemoryStore/SQLiteMemoryStore + MemoryManager facade + MemoryEntry model + ADR-0008) |
 | Phase-11 | ✅ | v1.1.0 | Workflow Engine (WorkflowRegistry + WorkflowRunRepository + WorkflowEngine facade composing Orchestrator/ExecutionEngine + ToolExecutor + ADR-0009) |
 | Phase-12 | ✅ | v1.2.0 | Security & Permissions (PathSandboxPolicy + AgentPermission + PermissionRegistry + ToolAuthorizer + agent_name-aware ToolExecutor/WorkflowStep + ADR-0010) |
+| Phase-13 | ✅ | v1.3.0 | Monitoring & Observability (ObservabilityEvent/MetricPoint/ObservabilityConfig models + InMemoryRecorder + ObservabilityRegistry + ObservabilityManager facade + Observer pattern wired into Orchestrator/ExecutionEngine/ToolExecutor/WorkflowEngine + ADR-0011) |
 
 ---
 
@@ -34,7 +35,6 @@ Last Completed Phase: **Phase-12 – Security & Permissions**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-13 | ⏳ | Monitoring & Observability |
 | Phase-14 | ⏳ | Plugin & Extension System |
 | Phase-15 | ⏳ | Production Release (v1.0) |
 
@@ -42,39 +42,48 @@ Last Completed Phase: **Phase-12 – Security & Permissions**
 
 # Current Focus
 
-**Phase-12 has been implemented and verified** (new
-`orchestrator/security/` package -- `PathSandboxPolicy` /
-`AgentPermission` / `PermissionPolicy` models, `PermissionRegistry`
-loading/validating the new `config/permissions.yaml`, and
-`ToolAuthorizer` as the single reusable authorization entry point);
-five new exceptions under a new `SecurityError` base in
-`orchestrator/exceptions.py`; ADR-0010. `ToolDefinition` gains two new,
-optional, backward-compatible fields (`sandboxed_parameters`,
-`access_mode`), enforced by `ToolExecutor` via one new call to
-`ToolAuthorizer.authorize()` immediately after argument validation and
-before a tool ever runs; `ReadFileTool`/`ListDirectoryTool` themselves
-are unchanged (docstrings only). `ToolExecutor.execute()` gains one
-new, optional `agent_name` argument (default `None` -- unchecked,
-identical to every pre-Phase-12 call site); `WorkflowStep` gains one
-new, optional `agent_name` field for `tool_call` steps, parsed by
-`WorkflowRegistry` and passed through by
-`WorkflowEngine._run_tool_step()`, whose `except ToolError` clause
-widens to `except (ToolError, SecurityError)` so a denied authorization
-fails a workflow run the same way an existing `ToolError` already does.
-This is the only Phase-11 behavior change; every workflow/step without
-an `agent_name` runs exactly as before. The default
-`config/permissions.yaml` allows the project root plus the OS temp
-directory (resolved dynamically at load time via
-`tempfile.gettempdir()`), which is what keeps Phase-11's `tmp_path`-based
-`WorkflowEngine` tests passing unmodified against a default-constructed
-`ToolExecutor()` (see ADR-0010 Context/Alternatives); it also grants
-all four registered agents (`claude_code`, `codex`, `aider`, `gemini`)
-`read: true`, with `write` differentiated per agent as a concrete
-example of the axis. `AgentTask`, `Orchestrator`, `ExecutionEngine`,
-both `AgentInvoker` implementations, `AgentRegistry`,
-`ModelProviderRegistry`, `PromptManager`, and `MemoryManager` are all
-unchanged by this phase; 457 tests passing, Ruff check + format clean,
-up from 391 at Phase-11 close. Phase-13 has not started.
+**Phase-13 has been implemented and verified** (new
+`orchestrator/observability/` package -- `ObservabilityEvent` /
+`MetricPoint` / `ObservabilityConfig` models, `InMemoryRecorder`
+implementing the new `ObservabilityRecorder` Protocol,
+`ObservabilityRegistry` loading/validating the new
+`config/observability.yaml`, and `ObservabilityManager` as a
+query/record facade); three new exceptions under a new
+`ObservabilityError` base in `orchestrator/exceptions.py`; ADR-0011.
+`Orchestrator`, `ExecutionEngine`, `ToolExecutor`, and `WorkflowEngine`
+each gain one new, optional, backward-compatible `observer:
+ObservabilityRecorder | None = None` constructor parameter (the
+Observer pattern) -- when omitted, behavior is byte-for-byte identical
+to pre-Phase-13; when supplied, each component records the structured
+events, counters, and timers documented in ADR-0011 decision 5's
+table, with `ToolExecutor` reusing `ToolResult.duration_seconds`
+rather than re-measuring it. Storage is in-memory only this phase, by
+explicit decision -- no SQLite reuse, no exporters, no health-check
+endpoints, no dashboards. `AgentTask`, `AgentRegistry`,
+`ModelProviderRegistry`, `PromptManager`, `MemoryManager`, and
+`ToolAuthorizer` are all unchanged by this phase; 499 tests passing
+(42 new), Ruff check + format clean, up from 457 at Phase-12 close.
+Phase-14 has not started.
+
+**Phase-13 – Monitoring & Observability** objectives (all met):
+
+- Structured events, counters/timers, and duration measurements,
+  internal only -- no exporters, no health-check endpoints, no
+  dashboards, no HTTP monitoring APIs. ✅ (`ObservabilityEvent`,
+  `MetricPoint`; ADR-0011 Context/decision 2)
+- Observer pattern integration with zero required changes to any
+  existing call site. ✅ (`observer: ObservabilityRecorder | None =
+  None` on `Orchestrator`/`ExecutionEngine`/`ToolExecutor`/
+  `WorkflowEngine`; ADR-0011 decision 5)
+- Open/Closed for storage: integrated components depend on the
+  `ObservabilityRecorder` Protocol, not `InMemoryRecorder`. ✅
+  (ADR-0011 decision 3, Follow-up)
+- Config-driven enable/disable, matching the existing registry
+  validation pattern. ✅ (`config/observability.yaml`,
+  `ObservabilityRegistry`; ADR-0011 decision 4)
+- Preserve backward compatibility. ✅ (every new parameter defaults to
+  `None`; all 457 pre-Phase-13 tests remain valid unmodified;
+  ADR-0011 Consequences)
 
 **Phase-12 – Security & Permissions** objectives (all met):
 
@@ -205,7 +214,8 @@ up from 391 at Phase-11 close. Phase-13 has not started.
 | Tool Execution | ✅ |
 | Memory | ✅ |
 | Workflow Engine | ✅ |
-| Security | ⏳ |
+| Security | ✅ |
+| Observability | ✅ |
 | Production Ready | ⏳ |
 
 ---
@@ -222,6 +232,8 @@ up from 391 at Phase-11 close. Phase-13 has not started.
 | v0.9.0 | Stable Phase-09 |
 | v1.0.0 | Stable Phase-10 |
 | v1.1.0 | Stable Phase-11 |
+| v1.2.0 | Stable Phase-12 |
+| v1.3.0 | Stable Phase-13 |
 
 ---
 
@@ -254,4 +266,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v1.1.0**
+Current Version: **v1.3.0**

@@ -25,6 +25,8 @@ actually been approved. See ADR-0009 decision 4.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from orchestrator.core import Orchestrator
 from orchestrator.exceptions import (
     InvalidWorkflowStateTransitionError,
@@ -35,6 +37,8 @@ from orchestrator.exceptions import (
 from orchestrator.execution.engine import ExecutionEngine
 from orchestrator.logging_setup import get_logger
 from orchestrator.models import AgentTask, ExecutionState
+from orchestrator.observability.models import MetricPoint, ObservabilityEvent
+from orchestrator.observability.recorder import ObservabilityRecorder
 from orchestrator.tools.tool_executor import ToolExecutor
 from orchestrator.workflow.models import StepType, WorkflowRun, WorkflowRunState, WorkflowStep
 from orchestrator.workflow.repository import InMemoryWorkflowRunRepository, WorkflowRunRepository
@@ -68,12 +72,50 @@ class WorkflowEngine:
         tool_executor: ToolExecutor | None = None,
         registry: WorkflowRegistry | None = None,
         repository: WorkflowRunRepository | None = None,
+        observer: ObservabilityRecorder | None = None,
     ):
         self._orchestrator = orchestrator
         self._execution_engine = execution_engine
         self._tool_executor = tool_executor or ToolExecutor()
         self._registry = registry or WorkflowRegistry()
         self._repository = repository or InMemoryWorkflowRunRepository()
+        self._observer = observer
+
+    # ------------------------------------------------------------------ #
+    # Phase-13 (ADR-0011) observability helpers
+    # ------------------------------------------------------------------ #
+
+    def _observe_event(
+        self, event_type: str, duration_seconds: float | None = None, **attributes: str
+    ) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_event(
+            ObservabilityEvent(
+                component="workflow_engine",
+                event_type=event_type,
+                attributes=attributes,
+                duration_seconds=duration_seconds,
+            )
+        )
+
+    def _observe_metric(self, name: str, value: float, metric_type: str, **tags: str) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_metric(
+            MetricPoint(name=name, value=value, metric_type=metric_type, tags=tags)
+        )
+
+    @staticmethod
+    def _run_age_seconds(run: WorkflowRun) -> float:
+        """Wall-clock age of ``run`` since it was created -- used as the
+        run-level duration for ``workflow_run_completed`` /
+        ``workflow_run_failed``. Deliberately wall-clock (``created_at``
+        to now), not an accumulated active-only measurement, so it
+        includes any time spent paused at ``AWAITING_APPROVAL`` -- the
+        simplest correct answer to "how long did this run take" and the
+        smallest change, per ADR-0011 decision 5."""
+        return (datetime.now(UTC) - run.created_at).total_seconds()
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -90,6 +132,7 @@ class WorkflowEngine:
         run = WorkflowRun(workflow_id=workflow_id, state=WorkflowRunState.PENDING)
         self._repository.add(run)
         logger.info("Workflow run started: workflow_id=%s run_id=%s", workflow_id, run.run_id)
+        self._observe_event("workflow_run_started", workflow_id=workflow_id, run_id=run.run_id)
 
         run.state = WorkflowRunState.RUNNING
         run.touch()
@@ -179,6 +222,14 @@ class WorkflowEngine:
         run.touch()
         self._repository.update(run)
         logger.info("Workflow run completed: run_id=%s", run.run_id)
+        run_duration = self._run_age_seconds(run)
+        self._observe_event(
+            "workflow_run_completed", duration_seconds=run_duration, run_id=run.run_id
+        )
+        self._observe_metric("workflow_engine.runs_total", 1, "counter", outcome="completed")
+        self._observe_metric(
+            "workflow_engine.run_duration_seconds", run_duration, "timer", outcome="completed"
+        )
         return run
 
     def _run_tool_step(self, run: WorkflowRun, step: WorkflowStep) -> bool:
@@ -200,6 +251,7 @@ class WorkflowEngine:
                 step.step_id,
                 exc,
             )
+            self._observe_run_failed(run, step.step_id)
             return False
 
         run.context[step.step_id] = result.output
@@ -246,4 +298,21 @@ class WorkflowEngine:
             step.step_id,
             run.error,
         )
+        self._observe_run_failed(run, step.step_id)
         return False
+
+    def _observe_run_failed(self, run: WorkflowRun, step_id: str) -> None:
+        """Shared ``workflow_run_failed`` event/metric recording for
+        both step kinds' failure paths."""
+        run_duration = self._run_age_seconds(run)
+        self._observe_event(
+            "workflow_run_failed",
+            duration_seconds=run_duration,
+            run_id=run.run_id,
+            step_id=step_id,
+            error=run.error or "",
+        )
+        self._observe_metric("workflow_engine.runs_total", 1, "counter", outcome="failed")
+        self._observe_metric(
+            "workflow_engine.run_duration_seconds", run_duration, "timer", outcome="failed"
+        )

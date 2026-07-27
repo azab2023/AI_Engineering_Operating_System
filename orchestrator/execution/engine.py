@@ -33,6 +33,8 @@ from orchestrator.execution.invoker import AgentInvoker
 from orchestrator.execution.models import RetryPolicy
 from orchestrator.logging_setup import get_logger
 from orchestrator.models import AgentExecution, ExecutionState
+from orchestrator.observability.models import MetricPoint, ObservabilityEvent
+from orchestrator.observability.recorder import ObservabilityRecorder
 
 logger = get_logger("execution.engine")
 
@@ -57,6 +59,7 @@ class ExecutionEngine:
         orchestrator: Orchestrator,
         invoker: AgentInvoker | None = None,
         retry_policy: RetryPolicy | None = None,
+        observer: ObservabilityRecorder | None = None,
     ):
         if invoker is None:
             # Imported lazily so constructing an ExecutionEngine with an
@@ -68,6 +71,32 @@ class ExecutionEngine:
         self._orchestrator = orchestrator
         self._invoker = invoker
         self._retry_policy = retry_policy or RetryPolicy()
+        self._observer = observer
+
+    # ------------------------------------------------------------------ #
+    # Phase-13 (ADR-0011) observability helpers
+    # ------------------------------------------------------------------ #
+
+    def _observe_event(
+        self, event_type: str, duration_seconds: float | None = None, **attributes: str
+    ) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_event(
+            ObservabilityEvent(
+                component="execution_engine",
+                event_type=event_type,
+                attributes=attributes,
+                duration_seconds=duration_seconds,
+            )
+        )
+
+    def _observe_metric(self, name: str, value: float, metric_type: str, **tags: str) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_metric(
+            MetricPoint(name=name, value=value, metric_type=metric_type, tags=tags)
+        )
 
     def execute(self, execution: AgentExecution) -> AgentExecution:
         """Route (if needed), invoke, retry, and record the outcome of
@@ -111,9 +140,11 @@ class ExecutionEngine:
             if delay:
                 time.sleep(delay)
 
+            attempt_started = time.perf_counter()
             try:
                 result = self._invoker.invoke(agent, execution.task)
             except (AgentTimeoutError, AgentInvocationError) as exc:
+                attempt_duration = time.perf_counter() - attempt_started
                 last_error_message = str(exc)
                 logger.warning(
                     "Invocation attempt %d/%d failed for execution_id=%s: %s",
@@ -122,9 +153,43 @@ class ExecutionEngine:
                     execution.execution_id,
                     exc,
                 )
+                self._observe_event(
+                    "invocation_attempt_failed",
+                    duration_seconds=attempt_duration,
+                    execution_id=execution.execution_id,
+                    agent_name=agent.name,
+                    attempt=str(attempt),
+                )
+                self._observe_metric(
+                    "execution_engine.attempts_total", 1, "counter", outcome="error"
+                )
+                self._observe_metric(
+                    "execution_engine.invocation_duration_seconds",
+                    attempt_duration,
+                    "timer",
+                    agent_name=agent.name,
+                )
                 continue
 
+            attempt_duration = time.perf_counter() - attempt_started
+            self._observe_metric(
+                "execution_engine.invocation_duration_seconds",
+                attempt_duration,
+                "timer",
+                agent_name=agent.name,
+            )
+
             if result.succeeded():
+                self._observe_event(
+                    "execution_succeeded",
+                    duration_seconds=attempt_duration,
+                    execution_id=execution.execution_id,
+                    agent_name=agent.name,
+                    attempt=str(attempt),
+                )
+                self._observe_metric(
+                    "execution_engine.attempts_total", 1, "counter", outcome="success"
+                )
                 return self._orchestrator.mark_awaiting_approval(
                     execution.execution_id, result=result.output
                 )
@@ -139,8 +204,22 @@ class ExecutionEngine:
                 execution.execution_id,
                 last_error_message,
             )
+            self._observe_event(
+                "invocation_attempt_failed",
+                duration_seconds=attempt_duration,
+                execution_id=execution.execution_id,
+                agent_name=agent.name,
+                attempt=str(attempt),
+            )
+            self._observe_metric("execution_engine.attempts_total", 1, "counter", outcome="error")
 
         exhausted = MaxRetriesExceededError(
             agent.name, self._retry_policy.max_attempts, last_error_message
+        )
+        self._observe_event(
+            "execution_retries_exhausted",
+            execution_id=execution.execution_id,
+            agent_name=agent.name,
+            attempts=str(self._retry_policy.max_attempts),
         )
         return self._orchestrator.mark_failed(execution.execution_id, error=str(exhausted))

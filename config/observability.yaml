@@ -1,0 +1,25 @@
+# Observability Configuration — Phase-13 (Monitoring & Observability)
+#
+# Loaded by orchestrator.observability.observability_registry.
+# ObservabilityRegistry, honored by orchestrator.observability.recorder.
+# InMemoryRecorder -- see ADR-0011.
+#
+# All four fields are optional booleans; any field omitted here falls
+# back to its ObservabilityConfig default (True). Internal observability
+# only -- no exporters, no network calls, no health-check endpoints.
+#
+#   enabled          - master switch. When false, neither events nor
+#                       metrics are recorded regardless of the other
+#                       three fields below.
+#   record_metrics    - whether recorded metrics (counters/timers) are
+#                        actually stored.
+#   record_events      - whether recorded structured events are
+#                         actually stored.
+#   timing_enabled       - whether integrated components measure and
+#                           attach duration_seconds / timer metrics at
+#                           all.
+
+enabled: true
+record_metrics: true
+record_events: true
+timing_enabled: true

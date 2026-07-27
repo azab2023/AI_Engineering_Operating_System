@@ -27,6 +27,8 @@ from orchestrator.exceptions import (
     UnknownArgumentError,
 )
 from orchestrator.logging_setup import get_logger
+from orchestrator.observability.models import MetricPoint, ObservabilityEvent
+from orchestrator.observability.recorder import ObservabilityRecorder
 from orchestrator.security.authorizer import ToolAuthorizer
 from orchestrator.tools.models import ToolDefinition, ToolResult
 from orchestrator.tools.tool_factory import ToolFactory
@@ -62,10 +64,37 @@ class ToolExecutor:
         registry: ToolRegistry | None = None,
         factory: type[ToolFactory] = ToolFactory,
         authorizer: ToolAuthorizer | None = None,
+        observer: ObservabilityRecorder | None = None,
     ):
         self._registry = registry or ToolRegistry()
         self._factory = factory
         self._authorizer = authorizer or ToolAuthorizer()
+        self._observer = observer
+
+    # ------------------------------------------------------------------ #
+    # Phase-13 (ADR-0011) observability helpers
+    # ------------------------------------------------------------------ #
+
+    def _observe_event(
+        self, event_type: str, duration_seconds: float | None = None, **attributes: str
+    ) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_event(
+            ObservabilityEvent(
+                component="tool_executor",
+                event_type=event_type,
+                attributes=attributes,
+                duration_seconds=duration_seconds,
+            )
+        )
+
+    def _observe_metric(self, name: str, value: float, metric_type: str, **tags: str) -> None:
+        if self._observer is None:
+            return
+        self._observer.record_metric(
+            MetricPoint(name=name, value=value, metric_type=metric_type, tags=tags)
+        )
 
     def execute(
         self,
@@ -115,7 +144,11 @@ class ToolExecutor:
 
         try:
             result = tool.execute(arguments)
-        except ToolExecutionError:
+        except ToolExecutionError as exc:
+            self._observe_event("tool_execution_failed", tool_name=tool_name, error=str(exc))
+            self._observe_metric(
+                "tool_executor.calls_total", 1, "counter", tool_name=tool_name, outcome="error"
+            )
             raise
         except Exception as exc:  # noqa: BLE001 - see docstring below
             # A conforming ``Tool`` implementation should only ever
@@ -125,10 +158,31 @@ class ToolExecutor:
             # failure leak past the ``ToolExecutor`` Facade unannounced
             # -- the same fail-loudly-but-specifically posture as every
             # prior phase's boundary layer.
-            raise ToolExecutionError(tool_name, str(exc)) from exc
+            wrapped = ToolExecutionError(tool_name, str(exc))
+            self._observe_event("tool_execution_failed", tool_name=tool_name, error=str(wrapped))
+            self._observe_metric(
+                "tool_executor.calls_total", 1, "counter", tool_name=tool_name, outcome="error"
+            )
+            raise wrapped from exc
 
         logger.info(
             "Tool executed: tool_name=%s duration=%.4fs", tool_name, result.duration_seconds
+        )
+        # Reuses the Tool's own already-computed duration_seconds rather
+        # than re-measuring here -- see ADR-0011 decision 5.
+        self._observe_event(
+            "tool_executed",
+            duration_seconds=result.duration_seconds,
+            tool_name=tool_name,
+        )
+        self._observe_metric(
+            "tool_executor.calls_total", 1, "counter", tool_name=tool_name, outcome="success"
+        )
+        self._observe_metric(
+            "tool_executor.execution_duration_seconds",
+            result.duration_seconds,
+            "timer",
+            tool_name=tool_name,
         )
         return result
 
