@@ -180,6 +180,61 @@ def test_valid_multi_step_workflow_parses(tmp_path: Path):
 _SINGLE_TOOL_STEP = [{"step_id": "s1", "step_type": "tool_call", "tool_name": "read_file"}]
 
 
+# --------------------------------------------------------------------- #
+# Phase-12 (ADR-0010): tool_call step agent_name
+# --------------------------------------------------------------------- #
+
+
+def test_tool_call_step_agent_name_defaults_to_none(tmp_path: Path):
+    path = _write(tmp_path, {"workflows": {"w1": {"steps": _SINGLE_TOOL_STEP}}})
+    registry = WorkflowRegistry(path)
+    assert registry.get_definition("w1").step_at(0).agent_name is None
+
+
+def test_tool_call_step_agent_name_parsed(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        {
+            "workflows": {
+                "w1": {
+                    "steps": [
+                        {
+                            "step_id": "s1",
+                            "step_type": "tool_call",
+                            "tool_name": "read_file",
+                            "agent_name": "aider",
+                        }
+                    ]
+                }
+            }
+        },
+    )
+    registry = WorkflowRegistry(path)
+    assert registry.get_definition("w1").step_at(0).agent_name == "aider"
+
+
+def test_tool_call_step_agent_name_non_string_raises(tmp_path: Path):
+    path = _write(
+        tmp_path,
+        {
+            "workflows": {
+                "w1": {
+                    "steps": [
+                        {
+                            "step_id": "s1",
+                            "step_type": "tool_call",
+                            "tool_name": "read_file",
+                            "agent_name": 123,
+                        }
+                    ]
+                }
+            }
+        },
+    )
+    with pytest.raises(WorkflowRegistryError, match="agent_name"):
+        WorkflowRegistry(path)
+
+
 def test_get_definition_unknown_workflow_raises(tmp_path: Path):
     path = _write(tmp_path, {"workflows": {"w1": {"steps": _SINGLE_TOOL_STEP}}})
     registry = WorkflowRegistry(path)

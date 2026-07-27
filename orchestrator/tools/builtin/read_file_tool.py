@@ -6,8 +6,13 @@ orchestrator.tools.builtin.read_file_tool
 read_file`` -- reads the full text contents of one file on disk.
 
 Read-only, single-file, no shell/subprocess involvement. Path
-sandboxing / permission enforcement is out of scope for Phase-09 (see
-ADR-0007 Follow-up; planned for Phase-12 Security & Permissions).
+sandboxing / permission enforcement is not implemented here -- as of
+Phase-12 (ADR-0010), ``ToolExecutor`` checks this tool's ``path``
+argument against the configured path sandbox (and, when a caller
+supplies an ``agent_name``, that agent's read/write permission) via
+``orchestrator.security.authorizer.ToolAuthorizer`` *before*
+``execute()`` is ever called. This class stays focused on its own
+business logic and is unaware of either check.
 """
 
 from __future__ import annotations

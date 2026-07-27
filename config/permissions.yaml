@@ -1,0 +1,62 @@
+# Permission Configuration — Phase-12 (Security & Permissions)
+#
+# Two independent sections, both enforced centrally by
+# orchestrator.security.authorizer.ToolAuthorizer via ToolExecutor --
+# see ADR-0010. Additive: this file does not modify tools.yaml,
+# workflows.yaml, or any other config, and nothing outside the new
+# orchestrator/security/ package depends on it existing.
+#
+# ---------------------------------------------------------------------
+# path_sandbox
+# ---------------------------------------------------------------------
+# Defines the set of directories a tool argument declared in a
+# ToolDefinition's `sandboxed_parameters` (config/tools.yaml) is
+# permitted to resolve within.
+#
+#   allowed_roots            - list of directories. Each entry may be
+#                               absolute, or relative to the project
+#                               root (resolved against it). A checked
+#                               path is allowed only if it resolves
+#                               (Path.resolve(), following symlinks) to
+#                               one of these roots, or a descendant of
+#                               one of them.
+#   include_system_temp_dir  - true|false. When true, the OS temp
+#                               directory (tempfile.gettempdir(),
+#                               resolved dynamically at load time -- not
+#                               a hard-coded path, since it differs per
+#                               machine/CI) is appended to allowed_roots.
+#                               This keeps local development and test
+#                               fixtures (e.g. pytest's tmp_path) working
+#                               against the default policy.
+#
+# ---------------------------------------------------------------------
+# agent_permissions
+# ---------------------------------------------------------------------
+# One entry per agent name (matching config/agents.yaml /
+# config/agent_registry.yaml), each with independent read/write
+# booleans. Checked only when a caller supplies an agent_name to
+# ToolExecutor.execute() (e.g. a WorkflowStep.agent_name) against the
+# tool's own `access_mode` ("read" | "write", config/tools.yaml). An
+# agent name with no entry here is denied, not defaulted permissively.
+
+path_sandbox:
+  allowed_roots:
+    - "."
+  include_system_temp_dir: true
+
+agent_permissions:
+  claude_code:
+    read: true
+    write: true
+
+  codex:
+    read: true
+    write: true
+
+  aider:
+    read: true
+    write: false
+
+  gemini:
+    read: true
+    write: false

@@ -121,13 +121,34 @@ class ToolRegistry:
             self._parse_parameter(tool_name, raw_parameter) for raw_parameter in raw_parameters
         )
 
-        return ToolDefinition(
-            tool_name=tool_name,
-            tool_type=tool_type,
-            enabled=enabled,
-            description=description,
-            parameters=parameters,
-        )
+        raw_sandboxed_parameters = entry.get("sandboxed_parameters", [])
+        if not isinstance(raw_sandboxed_parameters, list):
+            raise ToolRegistryError(
+                f"Tool entry for {tool_name!r}: 'sandboxed_parameters' must be a list"
+            )
+        for name in raw_sandboxed_parameters:
+            if not isinstance(name, str) or not name.strip():
+                raise ToolRegistryError(
+                    f"Tool entry for {tool_name!r}: 'sandboxed_parameters' entries must be "
+                    f"non-empty strings, got {name!r}"
+                )
+
+        access_mode = entry.get("access_mode", "read")
+        if not isinstance(access_mode, str):
+            raise ToolRegistryError(f"Tool entry for {tool_name!r}: 'access_mode' must be a string")
+
+        try:
+            return ToolDefinition(
+                tool_name=tool_name,
+                tool_type=tool_type,
+                enabled=enabled,
+                description=description,
+                parameters=parameters,
+                sandboxed_parameters=tuple(raw_sandboxed_parameters),
+                access_mode=access_mode,
+            )
+        except ValueError as exc:
+            raise ToolRegistryError(f"Tool entry for {tool_name!r}: {exc}") from exc
 
     def _parse_parameter(self, tool_name: str, entry: Any) -> ToolParameter:
         if not isinstance(entry, dict):

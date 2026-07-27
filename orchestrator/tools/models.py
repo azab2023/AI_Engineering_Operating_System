@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 _VALID_ARGUMENT_TYPES = frozenset({"string", "number", "boolean"})
+_VALID_ACCESS_MODES = frozenset({"read", "write"})
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,16 @@ class ToolDefinition:
             may accept. ``ToolExecutor`` rejects both a missing
             ``required`` argument and an undeclared one -- see
             ``MissingRequiredArgumentError`` / ``UnknownArgumentError``.
+        sandboxed_parameters: names of ``parameters`` entries that hold
+            filesystem paths ``ToolExecutor``'s ``ToolAuthorizer`` must
+            check against the configured path sandbox before running
+            this tool. Defaults to empty -- opt-in per tool, Phase-12
+            (ADR-0010) decision 5.
+        access_mode: ``"read"`` or ``"write"`` -- which per-agent
+            permission (``AgentPermission.can_read`` /
+            ``.can_write``) a caller needs to run this tool, when it
+            identifies itself via ``agent_name``. Defaults to
+            ``"read"``, matching every tool that exists as of Phase-12.
     """
 
     tool_name: str
@@ -82,6 +93,8 @@ class ToolDefinition:
     enabled: bool
     description: str
     parameters: tuple[ToolParameter, ...] = field(default_factory=tuple)
+    sandboxed_parameters: tuple[str, ...] = field(default_factory=tuple)
+    access_mode: str = "read"
 
     def __post_init__(self) -> None:
         if not self.tool_name or not self.tool_name.strip():
@@ -90,6 +103,18 @@ class ToolDefinition:
             raise ValueError("ToolDefinition.tool_type must be a non-empty string")
         if not self.description or not self.description.strip():
             raise ValueError("ToolDefinition.description must be a non-empty string")
+        if self.access_mode not in _VALID_ACCESS_MODES:
+            raise ValueError(
+                f"ToolDefinition.access_mode must be one of {sorted(_VALID_ACCESS_MODES)}, "
+                f"got {self.access_mode!r}"
+            )
+        declared = self.declared_argument_names()
+        unknown_sandboxed = set(self.sandboxed_parameters) - declared
+        if unknown_sandboxed:
+            raise ValueError(
+                f"ToolDefinition.sandboxed_parameters references undeclared "
+                f"parameter(s): {sorted(unknown_sandboxed)}"
+            )
 
     def required_argument_names(self) -> frozenset[str]:
         return frozenset(p.name for p in self.parameters if p.required)

@@ -530,6 +530,63 @@ class WorkflowStepNotApprovedError(WorkflowError):
         )
 
 
+class SecurityError(OrchestratorError):
+    """Base class for all Phase-12 security-and-permissions errors.
+
+    Distinct from ``ToolError`` (Phase-09): these originate from
+    ``orchestrator.security`` -- path-sandbox and per-agent read/write
+    authorization -- not from resolving, validating, or running a
+    ``Tool`` itself. ``ToolExecutor`` raises these via
+    ``orchestrator.security.authorizer.ToolAuthorizer``, after argument
+    validation and before a tool ever runs. See ADR-0010.
+    """
+
+
+class PermissionRegistryError(SecurityError):
+    """Raised when ``config/permissions.yaml`` cannot be loaded or fails
+    validation. Mirrors ``ToolRegistryError`` (Phase-09)."""
+
+
+class PathPermissionError(SecurityError):
+    """Raised when a tool argument declared in
+    ``ToolDefinition.sandboxed_parameters`` resolves outside the
+    configured path sandbox (``PathSandboxPolicy.allowed_roots``)."""
+
+    def __init__(self, tool_name: str, argument_name: str, path: object):
+        self.tool_name = tool_name
+        self.argument_name = argument_name
+        self.path = path
+        super().__init__(
+            f"Tool {tool_name!r} argument {argument_name!r} path {str(path)!r} "
+            "is outside the allowed path sandbox"
+        )
+
+
+class AgentPermissionError(SecurityError):
+    """Raised when a known agent's configured ``AgentPermission`` does
+    not grant the access mode (``read`` | ``write``) a tool requires."""
+
+    def __init__(self, agent_name: str, tool_name: str, access_mode: str):
+        self.agent_name = agent_name
+        self.tool_name = tool_name
+        self.access_mode = access_mode
+        super().__init__(
+            f"Agent {agent_name!r} is not permitted {access_mode!r} access "
+            f"required by tool {tool_name!r}"
+        )
+
+
+class UnknownAgentPermissionError(SecurityError):
+    """Raised when an ``agent_name`` supplied to ``ToolExecutor.execute()``
+    has no entry in ``config/permissions.yaml``'s ``agent_permissions``
+    section. Denied outright rather than defaulted permissively, per
+    this project's fail-loudly philosophy."""
+
+    def __init__(self, agent_name: str):
+        self.agent_name = agent_name
+        super().__init__(f"No permission entry configured for agent_name={agent_name!r}")
+
+
 class InvalidStateTransitionError(OrchestratorError):
     """Raised when an orchestrator method is called on an execution whose
     current state does not permit that action.

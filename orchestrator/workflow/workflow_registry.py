@@ -165,6 +165,12 @@ class WorkflowRegistry:
                 f"Workflow {workflow_id!r}, step {step_id!r}: 'tool_arguments' must be a mapping"
             )
 
+        agent_name = entry.get("agent_name")
+        if agent_name is not None and not isinstance(agent_name, str):
+            raise WorkflowRegistryError(
+                f"Workflow {workflow_id!r}, step {step_id!r}: 'agent_name' must be a string"
+            )
+
         try:
             return WorkflowStep(
                 step_id=step_id,
@@ -176,6 +182,7 @@ class WorkflowRegistry:
                 prompt_variables=dict(prompt_variables),
                 tool_name=entry.get("tool_name"),
                 tool_arguments=dict(tool_arguments),
+                agent_name=agent_name,
             )
         except ValueError as exc:
             raise WorkflowRegistryError(f"Workflow {workflow_id!r}: {exc}") from exc

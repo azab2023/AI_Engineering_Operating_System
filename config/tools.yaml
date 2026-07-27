@@ -21,6 +21,16 @@
 #                          type        - "string" | "number" | "boolean"
 #                          required    - true|false
 #                          description - documentation only
+#   sandboxed_parameters  - Phase-12 (ADR-0010): names of the above
+#                            `parameters` that hold filesystem paths.
+#                            ToolExecutor's ToolAuthorizer checks each
+#                            against the configured path sandbox
+#                            (config/permissions.yaml) before running
+#                            the tool. Optional, defaults to [].
+#   access_mode           - Phase-12 (ADR-0010): "read" | "write" --
+#                            which per-agent permission a caller needs
+#                            when it identifies itself via agent_name.
+#                            Optional, defaults to "read".
 
 tools:
 
@@ -33,6 +43,8 @@ tools:
         type: string
         required: true
         description: "Path to the file to read."
+    sandboxed_parameters: [path]
+    access_mode: read
 
   list_directory:
     tool_type: list_directory
@@ -43,3 +55,5 @@ tools:
         type: string
         required: true
         description: "Path to the directory to list."
+    sandboxed_parameters: [path]
+    access_mode: read

@@ -28,6 +28,7 @@ from __future__ import annotations
 from orchestrator.core import Orchestrator
 from orchestrator.exceptions import (
     InvalidWorkflowStateTransitionError,
+    SecurityError,
     ToolError,
     WorkflowStepNotApprovedError,
 )
@@ -185,8 +186,10 @@ class WorkflowEngine:
         (caller should advance to the next step), ``False`` if the run
         was just marked ``FAILED`` (caller should stop)."""
         try:
-            result = self._tool_executor.execute(step.tool_name, step.tool_arguments)
-        except ToolError as exc:
+            result = self._tool_executor.execute(
+                step.tool_name, step.tool_arguments, agent_name=step.agent_name
+            )
+        except (ToolError, SecurityError) as exc:
             run.state = WorkflowRunState.FAILED
             run.error = str(exc)
             run.touch()

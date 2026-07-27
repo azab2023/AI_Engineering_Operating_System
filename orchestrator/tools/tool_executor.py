@@ -27,6 +27,7 @@ from orchestrator.exceptions import (
     UnknownArgumentError,
 )
 from orchestrator.logging_setup import get_logger
+from orchestrator.security.authorizer import ToolAuthorizer
 from orchestrator.tools.models import ToolDefinition, ToolResult
 from orchestrator.tools.tool_factory import ToolFactory
 from orchestrator.tools.tool_registry import ToolRegistry
@@ -50,19 +51,40 @@ class ToolExecutor:
             ``config/tools.yaml`` path.
         factory: resolves a ``ToolDefinition`` to a concrete ``Tool``
             instance. Defaults to ``ToolFactory``.
+        authorizer: the Phase-12 (ADR-0010) authorization layer --
+            path-sandbox and per-agent read/write checks. Defaults to
+            a ``ToolAuthorizer`` loaded from the default
+            ``config/permissions.yaml`` path.
     """
 
     def __init__(
         self,
         registry: ToolRegistry | None = None,
         factory: type[ToolFactory] = ToolFactory,
+        authorizer: ToolAuthorizer | None = None,
     ):
         self._registry = registry or ToolRegistry()
         self._factory = factory
+        self._authorizer = authorizer or ToolAuthorizer()
 
-    def execute(self, tool_name: str, arguments: dict[str, Any] | None = None) -> ToolResult:
+    def execute(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+    ) -> ToolResult:
         """Resolve ``tool_name``, validate ``arguments`` against its
-        declared parameters, and run it.
+        declared parameters, authorize the call, and run it.
+
+        Args:
+            tool_name: the tool to run.
+            arguments: the arguments to pass to it.
+            agent_name: the calling agent's identity, if known (e.g. a
+                ``WorkflowStep.agent_name``). When ``None`` (the
+                default), no agent-level permission check is performed
+                -- unchanged behavior for every pre-Phase-12 caller.
+                The path-sandbox check always runs regardless. See
+                ADR-0010 decision 7.
 
         Raises:
             ToolNotFoundError: no entry exists for ``tool_name``.
@@ -74,12 +96,20 @@ class ToolExecutor:
             UnknownArgumentError: an undeclared argument was supplied.
             InvalidArgumentTypeError: an argument's value does not match
                 its declared type.
-            ToolExecutionError: the tool resolved and its arguments
-                validated, but running it failed.
+            UnknownAgentPermissionError: ``agent_name`` was given but is
+                not configured in ``config/permissions.yaml``.
+            AgentPermissionError: ``agent_name`` is configured but not
+                permitted this tool's ``access_mode``.
+            PathPermissionError: a sandboxed argument resolves outside
+                the configured path sandbox.
+            ToolExecutionError: the tool resolved, its arguments
+                validated, and authorization passed, but running it
+                failed.
         """
         definition = self._registry.get_definition(tool_name)
         arguments = arguments or {}
         self._validate_arguments(definition, arguments)
+        self._authorizer.authorize(definition, arguments, agent_name)
 
         tool = self._factory.create(definition)
 

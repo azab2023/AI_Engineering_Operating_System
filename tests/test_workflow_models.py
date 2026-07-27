@@ -45,6 +45,14 @@ def test_tool_call_step_valid_minimal():
     step = WorkflowStep(step_id="s1", step_type=StepType.TOOL_CALL, tool_name="read_file")
     assert step.tool_name == "read_file"
     assert step.tool_arguments == {}
+    assert step.agent_name is None
+
+
+def test_tool_call_step_accepts_agent_name():
+    step = WorkflowStep(
+        step_id="s1", step_type=StepType.TOOL_CALL, tool_name="read_file", agent_name="aider"
+    )
+    assert step.agent_name == "aider"
 
 
 def test_step_id_must_be_non_empty():

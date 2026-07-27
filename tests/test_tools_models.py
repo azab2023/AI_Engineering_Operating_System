@@ -67,6 +67,64 @@ def test_tool_definition_rejects_empty_required_fields(kwargs):
         ToolDefinition(**kwargs)
 
 
+# --------------------------------------------------------------------- #
+# Phase-12 (ADR-0010): sandboxed_parameters / access_mode
+# --------------------------------------------------------------------- #
+
+
+def test_tool_definition_defaults_no_sandboxed_parameters_and_read_access_mode():
+    definition = ToolDefinition(
+        tool_name="read_file", tool_type="read_file", enabled=True, description="Read a file."
+    )
+    assert definition.sandboxed_parameters == ()
+    assert definition.access_mode == "read"
+
+
+def test_tool_definition_accepts_declared_sandboxed_parameter():
+    definition = ToolDefinition(
+        tool_name="read_file",
+        tool_type="read_file",
+        enabled=True,
+        description="Read a file.",
+        parameters=(ToolParameter(name="path", type="string", required=True),),
+        sandboxed_parameters=("path",),
+    )
+    assert definition.sandboxed_parameters == ("path",)
+
+
+def test_tool_definition_undeclared_sandboxed_parameter_raises():
+    with pytest.raises(ValueError, match="undeclared"):
+        ToolDefinition(
+            tool_name="read_file",
+            tool_type="read_file",
+            enabled=True,
+            description="Read a file.",
+            sandboxed_parameters=("path",),
+        )
+
+
+def test_tool_definition_access_mode_write_accepted():
+    definition = ToolDefinition(
+        tool_name="write_file",
+        tool_type="write_file",
+        enabled=True,
+        description="Write a file.",
+        access_mode="write",
+    )
+    assert definition.access_mode == "write"
+
+
+def test_tool_definition_invalid_access_mode_raises():
+    with pytest.raises(ValueError, match="access_mode"):
+        ToolDefinition(
+            tool_name="read_file",
+            tool_type="read_file",
+            enabled=True,
+            description="Read a file.",
+            access_mode="execute",
+        )
+
+
 def test_tool_result_valid():
     result = ToolResult(tool_name="read_file", output="contents", duration_seconds=0.01)
     assert result.output == "contents"

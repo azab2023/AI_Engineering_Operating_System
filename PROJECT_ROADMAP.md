@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v1.1.0**
+Current Version: **v1.2.0**
 
-Current Branch: **phase-11**
+Current Branch: **phase-12**
 
-Last Completed Phase: **Phase-11 – Workflow Engine**
+Last Completed Phase: **Phase-12 – Security & Permissions**
 
 ---
 
@@ -26,6 +26,7 @@ Last Completed Phase: **Phase-11 – Workflow Engine**
 | Phase-09 | ✅ | v0.9.0 | Tool Execution Framework (Tool Protocol + ToolRegistry + ToolFactory + ToolExecutor + built-in read_file/list_directory tools + ADR-0007) |
 | Phase-10 | ✅ | v1.0.0 | Memory Management (MemoryStore Protocol + InMemoryStore/SQLiteMemoryStore + MemoryManager facade + MemoryEntry model + ADR-0008) |
 | Phase-11 | ✅ | v1.1.0 | Workflow Engine (WorkflowRegistry + WorkflowRunRepository + WorkflowEngine facade composing Orchestrator/ExecutionEngine + ToolExecutor + ADR-0009) |
+| Phase-12 | ✅ | v1.2.0 | Security & Permissions (PathSandboxPolicy + AgentPermission + PermissionRegistry + ToolAuthorizer + agent_name-aware ToolExecutor/WorkflowStep + ADR-0010) |
 
 ---
 
@@ -33,7 +34,6 @@ Last Completed Phase: **Phase-11 – Workflow Engine**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-12 | ⏳ | Security & Permissions |
 | Phase-13 | ⏳ | Monitoring & Observability |
 | Phase-14 | ⏳ | Plugin & Extension System |
 | Phase-15 | ⏳ | Production Release (v1.0) |
@@ -42,27 +42,61 @@ Last Completed Phase: **Phase-11 – Workflow Engine**
 
 # Current Focus
 
-**Phase-11 has been implemented and verified** (new
-`orchestrator/workflow/` package -- `StepType` / `WorkflowStep` /
-`WorkflowDefinition` / `WorkflowRunState` / `WorkflowRun` models,
-`WorkflowRegistry` loading/validating the new `config/workflows.yaml`,
-`WorkflowRunRepository` Protocol + `InMemoryWorkflowRunRepository`, and
-`WorkflowEngine` Facade (`start`/`resume`/`get_run`/`list_runs`)); six
-new exceptions under a new `WorkflowError` base in
-`orchestrator/exceptions.py`; ADR-0009. This is the first phase to
-actually call `ToolExecutor` (ADR-0007 decision 6) and to exercise the
-human-approval pause/resume path for `agent_task` steps, structurally
-reusing `Orchestrator.approve()` unmodified rather than introducing a
-new approval mechanism; `MemoryManager` is not wired into this phase's
-step vocabulary (deferred, see ADR-0009 Follow-up). `AgentTask`,
-`Orchestrator`, `ExecutionEngine`, both `AgentInvoker` implementations,
-`AgentRegistry`, `ModelProviderRegistry`, `PromptManager`,
-`ToolExecutor`, and `MemoryManager` are all unchanged by this phase.
-Implementation is deliberately minimal and linear -- exactly two step
-kinds (`agent_task`, `tool_call`), no branching, no parallel steps, no
-workflow-level retry, and no SQLite-backed run persistence yet (see
-ADR-0009 Alternatives/Follow-up); 391 tests passing, Ruff check +
-format clean, up from 338 at Phase-10 close. Phase-12 has not started.
+**Phase-12 has been implemented and verified** (new
+`orchestrator/security/` package -- `PathSandboxPolicy` /
+`AgentPermission` / `PermissionPolicy` models, `PermissionRegistry`
+loading/validating the new `config/permissions.yaml`, and
+`ToolAuthorizer` as the single reusable authorization entry point);
+five new exceptions under a new `SecurityError` base in
+`orchestrator/exceptions.py`; ADR-0010. `ToolDefinition` gains two new,
+optional, backward-compatible fields (`sandboxed_parameters`,
+`access_mode`), enforced by `ToolExecutor` via one new call to
+`ToolAuthorizer.authorize()` immediately after argument validation and
+before a tool ever runs; `ReadFileTool`/`ListDirectoryTool` themselves
+are unchanged (docstrings only). `ToolExecutor.execute()` gains one
+new, optional `agent_name` argument (default `None` -- unchecked,
+identical to every pre-Phase-12 call site); `WorkflowStep` gains one
+new, optional `agent_name` field for `tool_call` steps, parsed by
+`WorkflowRegistry` and passed through by
+`WorkflowEngine._run_tool_step()`, whose `except ToolError` clause
+widens to `except (ToolError, SecurityError)` so a denied authorization
+fails a workflow run the same way an existing `ToolError` already does.
+This is the only Phase-11 behavior change; every workflow/step without
+an `agent_name` runs exactly as before. The default
+`config/permissions.yaml` allows the project root plus the OS temp
+directory (resolved dynamically at load time via
+`tempfile.gettempdir()`), which is what keeps Phase-11's `tmp_path`-based
+`WorkflowEngine` tests passing unmodified against a default-constructed
+`ToolExecutor()` (see ADR-0010 Context/Alternatives); it also grants
+all four registered agents (`claude_code`, `codex`, `aider`, `gemini`)
+`read: true`, with `write` differentiated per agent as a concrete
+example of the axis. `AgentTask`, `Orchestrator`, `ExecutionEngine`,
+both `AgentInvoker` implementations, `AgentRegistry`,
+`ModelProviderRegistry`, `PromptManager`, and `MemoryManager` are all
+unchanged by this phase; 457 tests passing, Ruff check + format clean,
+up from 391 at Phase-11 close. Phase-13 has not started.
+
+**Phase-12 – Security & Permissions** objectives (all met):
+
+- Close the ADR-0007 Follow-up path-sandboxing deferral for
+  `ReadFileTool` / `ListDirectoryTool`. ✅ (`PathSandboxPolicy`,
+  `sandboxed_parameters`, `ToolAuthorizer._authorize_paths()`;
+  ADR-0010 decisions 2, 5, 7)
+- Close the Phase-02-era per-agent `config/permissions.yaml`
+  ("what this agent may read/write") deferral. ✅
+  (`agent_permissions` section, `AgentPermission`, `access_mode`,
+  `ToolAuthorizer._authorize_agent()`; ADR-0010 decisions 3, 4, 5, 7)
+- One reusable, centralized authorization layer -- no permission logic
+  duplicated in `ToolExecutor` or any individual `Tool`. ✅
+  (`ToolAuthorizer.authorize()`; ADR-0010 decision 7)
+- Open/Closed: a future filesystem-touching tool inherits both checks
+  automatically via its `config/tools.yaml` entry, with zero
+  `ToolExecutor` changes. ✅ (ADR-0010 decision 5 / Follow-up)
+- Preserve backward compatibility. ✅ (`sandboxed_parameters`,
+  `access_mode`, `ToolExecutor.execute()`'s `agent_name`, and
+  `WorkflowStep.agent_name` are all optional and default to
+  pre-Phase-12 behavior; every pre-Phase-12 test remains valid
+  unmodified; ADR-0010 decision 8/9, Consequences)
 
 **Phase-11 – Workflow Engine** objectives (all met):
 

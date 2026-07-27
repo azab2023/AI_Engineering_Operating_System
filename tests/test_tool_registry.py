@@ -206,3 +206,132 @@ def test_parameter_invalid_type_raises(tmp_path):
     )
     with pytest.raises(ToolRegistryError, match="path"):
         ToolRegistry(path)
+
+
+# --------------------------------------------------------------------- #
+# Phase-12 (ADR-0010): sandboxed_parameters / access_mode
+# --------------------------------------------------------------------- #
+
+
+def test_real_tools_are_sandboxed_and_read_access_mode():
+    registry = ToolRegistry(DEFAULT_TOOLS_PATH)
+    for expected_name in ("read_file", "list_directory"):
+        definition = registry.get_definition(expected_name)
+        assert definition.sandboxed_parameters == ("path",)
+        assert definition.access_mode == "read"
+
+
+def test_sandboxed_parameters_defaults_to_empty(tmp_path):
+    path = _write(tmp_path, _valid_yaml())
+    registry = ToolRegistry(path)
+    assert registry.get_definition("read_file").sandboxed_parameters == ()
+
+
+def test_access_mode_defaults_to_read(tmp_path):
+    path = _write(tmp_path, _valid_yaml())
+    registry = ToolRegistry(path)
+    assert registry.get_definition("read_file").access_mode == "read"
+
+
+def test_sandboxed_parameters_parsed(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            parameters:
+              - name: path
+                type: string
+                required: true
+            sandboxed_parameters: [path]
+        """,
+    )
+    registry = ToolRegistry(path)
+    assert registry.get_definition("read_file").sandboxed_parameters == ("path",)
+
+
+def test_access_mode_write_parsed(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          write_file:
+            tool_type: write_file
+            enabled: true
+            description: "Write a file."
+            access_mode: write
+        """,
+    )
+    registry = ToolRegistry(path)
+    assert registry.get_definition("write_file").access_mode == "write"
+
+
+def test_sandboxed_parameters_not_a_list_raises(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            parameters:
+              - name: path
+                type: string
+                required: true
+            sandboxed_parameters: "path"
+        """,
+    )
+    with pytest.raises(ToolRegistryError, match="sandboxed_parameters"):
+        ToolRegistry(path)
+
+
+def test_sandboxed_parameters_undeclared_name_raises(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            sandboxed_parameters: [path]
+        """,
+    )
+    with pytest.raises(ToolRegistryError, match="undeclared"):
+        ToolRegistry(path)
+
+
+def test_access_mode_not_a_string_raises(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            access_mode: 123
+        """,
+    )
+    with pytest.raises(ToolRegistryError, match="access_mode"):
+        ToolRegistry(path)
+
+
+def test_invalid_access_mode_value_raises(tmp_path):
+    path = _write(
+        tmp_path,
+        """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            access_mode: execute
+        """,
+    )
+    with pytest.raises(ToolRegistryError, match="access_mode"):
+        ToolRegistry(path)

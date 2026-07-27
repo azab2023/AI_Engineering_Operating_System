@@ -168,6 +168,80 @@ def test_tool_call_step_failure_marks_run_failed(tmp_path: Path, orchestrator: O
 
     assert run.state == WorkflowRunState.FAILED
     assert run.error is not None
+
+
+# --------------------------------------------------------------------- #
+# Phase-12 (ADR-0010): tool_call step agent_name / authorization
+# --------------------------------------------------------------------- #
+
+
+def test_tool_call_step_without_agent_name_unaffected_by_authorization(
+    tmp_path: Path, orchestrator: Orchestrator
+):
+    """No agent_name on the step (every workflow defined before
+    Phase-12) -- must complete exactly as before."""
+    source_file = tmp_path / "source.txt"
+    source_file.write_text("hello workflow", encoding="utf-8")
+    workflows_path = _write_workflows(
+        tmp_path, {"workflows": {"w1": {"steps": [_tool_call_step("read", source_file)]}}}
+    )
+    engine = _engine(orchestrator, workflows_path, [])
+
+    run = engine.start("w1")
+
+    assert run.state == WorkflowRunState.COMPLETED
+    assert run.context["read"] == "hello workflow"
+
+
+def test_tool_call_step_with_known_permitted_agent_completes(
+    tmp_path: Path, orchestrator: Orchestrator
+):
+    source_file = tmp_path / "source.txt"
+    source_file.write_text("hello workflow", encoding="utf-8")
+    step = _tool_call_step("read", source_file)
+    step["agent_name"] = "claude_code"  # config/permissions.yaml grants read: true
+    workflows_path = _write_workflows(tmp_path, {"workflows": {"w1": {"steps": [step]}}})
+    engine = _engine(orchestrator, workflows_path, [])
+
+    run = engine.start("w1")
+
+    assert run.state == WorkflowRunState.COMPLETED
+    assert run.context["read"] == "hello workflow"
+
+
+def test_tool_call_step_with_unknown_agent_name_marks_run_failed(
+    tmp_path: Path, orchestrator: Orchestrator
+):
+    source_file = tmp_path / "source.txt"
+    source_file.write_text("hello workflow", encoding="utf-8")
+    step = _tool_call_step("read", source_file)
+    step["agent_name"] = "ghost_agent"  # no entry in config/permissions.yaml
+    workflows_path = _write_workflows(tmp_path, {"workflows": {"w1": {"steps": [step]}}})
+    engine = _engine(orchestrator, workflows_path, [])
+
+    run = engine.start("w1")
+
+    assert run.state == WorkflowRunState.FAILED
+    assert run.error is not None
+    assert "ghost_agent" in run.error
+
+
+def test_tool_call_step_path_outside_sandbox_marks_run_failed(
+    tmp_path: Path, orchestrator: Orchestrator
+):
+    """A path clearly outside both the project root and the OS temp
+    dir (the default sandbox) must fail the run via the same
+    ``SecurityError`` handling path as an ``UnknownAgentPermissionError``."""
+    outside = Path("/definitely/outside/any/sandbox/file.txt")
+    workflows_path = _write_workflows(
+        tmp_path, {"workflows": {"w1": {"steps": [_tool_call_step("read", outside)]}}}
+    )
+    engine = _engine(orchestrator, workflows_path, [])
+
+    run = engine.start("w1")
+
+    assert run.state == WorkflowRunState.FAILED
+    assert run.error is not None
     assert "read" not in run.context
 
 

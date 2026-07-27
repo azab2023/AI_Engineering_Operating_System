@@ -14,10 +14,17 @@ capable of autonomous, multi-file, repo-aware coding tasks with tool use.
 - `config/` — reserved, empty until Phase-02.
 
 ## Planned Configuration (Phase-02+)
-- `config/permissions.yaml` — what this agent may read/write.
 - `config/model-settings.yaml` — model/version, context limits.
 - `config/prompts.yaml` — default prompts this agent should load from
   `prompts/system/` and `prompts/workflows/`.
+
+## Permissions (Phase-12)
+This agent's read/write permissions are no longer planned as a
+per-agent file in this folder. They are implemented centrally, as of
+Phase-12, in the project-root `config/permissions.yaml`'s
+`agent_permissions.claude_code` entry, enforced by
+`orchestrator.security.authorizer.ToolAuthorizer` via `ToolExecutor`.
+See `docs/architecture/decision-records/ADR-0010-security-permissions.md`.
 
 ## Known Constraints
 - Must never auto-merge or auto-publish; human approval required (see

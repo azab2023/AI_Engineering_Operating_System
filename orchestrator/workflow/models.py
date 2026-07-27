@@ -62,7 +62,12 @@ class WorkflowStep:
       already has -- a step's ``agent_task`` fields exist only to
       construct an ``AgentTask``, not to redefine one.
     - ``TOOL_CALL``: ``tool_name`` is required; ``tool_arguments`` is
-      optional.
+      optional. ``agent_name`` is also optional (Phase-12, ADR-0010):
+      when set, it is passed through to ``ToolExecutor.execute()`` so
+      its ``ToolAuthorizer`` can check that agent's read/write
+      permission for the tool; when unset (the default -- unchanged
+      from every workflow defined before Phase-12), no agent-level
+      permission check is performed for this step.
     """
 
     step_id: str
@@ -78,6 +83,7 @@ class WorkflowStep:
     # TOOL_CALL fields
     tool_name: str | None = None
     tool_arguments: dict[str, object] = field(default_factory=dict)
+    agent_name: str | None = None
 
     def __post_init__(self) -> None:
         if not self.step_id or not self.step_id.strip():

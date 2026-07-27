@@ -8,13 +8,18 @@ from pathlib import Path
 import pytest
 
 from orchestrator.exceptions import (
+    AgentPermissionError,
     InvalidArgumentTypeError,
     MissingRequiredArgumentError,
+    PathPermissionError,
     ToolDisabledError,
     ToolExecutionError,
     ToolNotFoundError,
+    UnknownAgentPermissionError,
     UnknownArgumentError,
 )
+from orchestrator.security.authorizer import ToolAuthorizer
+from orchestrator.security.models import AgentPermission, PathSandboxPolicy, PermissionPolicy
 from orchestrator.tools.tool_executor import ToolExecutor
 from orchestrator.tools.tool_registry import ToolRegistry
 
@@ -188,3 +193,136 @@ def test_execute_file_as_directory_raises_tool_execution_error(tmp_path):
     executor = ToolExecutor(registry=_registry(tmp_path, _tools_yaml()))
     with pytest.raises(ToolExecutionError, match="not a directory"):
         executor.execute("list_directory", {"path": str(target)})
+
+
+# --------------------------------------------------------------------- #
+# Phase-12 (ADR-0010): authorization -- path sandbox + agent permissions
+# --------------------------------------------------------------------- #
+
+
+def _sandboxed_tools_yaml() -> str:
+    return """\
+        tools:
+          read_file:
+            tool_type: read_file
+            enabled: true
+            description: "Read a file."
+            parameters:
+              - name: path
+                type: string
+                required: true
+            sandboxed_parameters: [path]
+            access_mode: read
+
+          write_file:
+            tool_type: read_file
+            enabled: true
+            description: "Pretend write tool (reuses read_file behavior for the test)."
+            parameters:
+              - name: path
+                type: string
+                required: true
+            sandboxed_parameters: [path]
+            access_mode: write
+        """
+
+
+def _authorizer(sandbox_root: Path, agent_permissions=None) -> ToolAuthorizer:
+    policy = PermissionPolicy(
+        path_sandbox=PathSandboxPolicy(allowed_roots=(sandbox_root.resolve(),)),
+        agent_permissions=agent_permissions or {},
+    )
+    return ToolAuthorizer(policy=policy)
+
+
+def test_execute_default_agent_name_is_none_and_unchecked(tmp_path):
+    """No agent_name supplied -- pre-Phase-12 call shape -- must behave
+    exactly as before, even against a tool with a restrictive
+    access_mode and no configured agent_permissions at all."""
+    target = tmp_path / "hello.txt"
+    target.write_text("hello world")
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path),
+    )
+
+    result = executor.execute("write_file", {"path": str(target)})
+
+    assert result.output == "hello world"
+
+
+def test_execute_path_outside_sandbox_raises(tmp_path):
+    outside = tmp_path.parent / "outside.txt"
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path),
+    )
+
+    with pytest.raises(PathPermissionError):
+        executor.execute("read_file", {"path": str(outside)})
+
+
+def test_execute_path_inside_sandbox_allowed(tmp_path):
+    target = tmp_path / "hello.txt"
+    target.write_text("hi")
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path),
+    )
+
+    result = executor.execute("read_file", {"path": str(target)})
+
+    assert result.output == "hi"
+
+
+def test_execute_unknown_agent_name_raises(tmp_path):
+    target = tmp_path / "hello.txt"
+    target.write_text("hi")
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path),
+    )
+
+    with pytest.raises(UnknownAgentPermissionError):
+        executor.execute("read_file", {"path": str(target)}, agent_name="ghost_agent")
+
+
+def test_execute_agent_without_write_permission_raises(tmp_path):
+    target = tmp_path / "hello.txt"
+    target.write_text("hi")
+    permissions = {"aider": AgentPermission(agent_name="aider", can_read=True, can_write=False)}
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path, permissions),
+    )
+
+    with pytest.raises(AgentPermissionError):
+        executor.execute("write_file", {"path": str(target)}, agent_name="aider")
+
+
+def test_execute_agent_with_write_permission_allowed(tmp_path):
+    target = tmp_path / "hello.txt"
+    target.write_text("hi")
+    permissions = {
+        "claude_code": AgentPermission(agent_name="claude_code", can_read=True, can_write=True)
+    }
+    executor = ToolExecutor(
+        registry=_registry(tmp_path, _sandboxed_tools_yaml()),
+        authorizer=_authorizer(tmp_path, permissions),
+    )
+
+    result = executor.execute("write_file", {"path": str(target)}, agent_name="claude_code")
+
+    assert result.output == "hi"
+
+
+def test_execute_default_authorizer_loads_real_permissions_file(tmp_path):
+    """No authorizer passed -- ToolExecutor must load the real,
+    default config/permissions.yaml, not raise on construction."""
+    target = tmp_path / "hello.txt"
+    target.write_text("hello world")
+    executor = ToolExecutor(registry=_registry(tmp_path, _tools_yaml()))
+
+    result = executor.execute("read_file", {"path": str(target)})
+
+    assert result.output == "hello world"
