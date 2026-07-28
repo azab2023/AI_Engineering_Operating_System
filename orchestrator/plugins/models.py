@@ -33,7 +33,7 @@ from enum import Enum
 #: ``version`` field. Kept as a local constant rather than reusing
 #: ``orchestrator.__init__.__version__`` -- see ADR-0012 decision 6 for
 #: why reconciling the two is out of scope for this phase.
-CURRENT_AEOS_VERSION = "1.4.0"
+CURRENT_AEOS_VERSION = "1.5.0"
 
 _VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 

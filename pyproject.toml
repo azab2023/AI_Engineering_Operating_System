@@ -1,9 +1,12 @@
 [project]
 name = "aeos"
-version = "1.4.0"
+version = "1.5.0"
 description = "AI Engineering Operating System (AEOS) - orchestration and persistence layer for managing multiple AI coding agents."
 requires-python = ">=3.11"
 readme = "README.md"
+
+[project.scripts]
+aeos = "orchestrator.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

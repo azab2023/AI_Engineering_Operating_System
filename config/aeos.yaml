@@ -1,7 +1,7 @@
 system:
   name: AI Engineering Operating System
   short_name: AEOS
-  version: 1.0.0
+  version: 1.5.0
   environment: development
 
 architecture:

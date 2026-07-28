@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v1.4.0**
+Current Version: **v1.5.0**
 
-Current Branch: **phase-14**
+Current Branch: **phase-15**
 
-Last Completed Phase: **Phase-14 – Plugin & Extension System**
+Last Completed Phase: **Phase-15 – Production Release**
 
 ---
 
@@ -29,6 +29,7 @@ Last Completed Phase: **Phase-14 – Plugin & Extension System**
 | Phase-12 | ✅ | v1.2.0 | Security & Permissions (PathSandboxPolicy + AgentPermission + PermissionRegistry + ToolAuthorizer + agent_name-aware ToolExecutor/WorkflowStep + ADR-0010) |
 | Phase-13 | ✅ | v1.3.0 | Monitoring & Observability (ObservabilityEvent/MetricPoint/ObservabilityConfig models + InMemoryRecorder + ObservabilityRegistry + ObservabilityManager facade + Observer pattern wired into Orchestrator/ExecutionEngine/ToolExecutor/WorkflowEngine + ADR-0011) |
 | Phase-14 | ✅ | v1.4.0 | Plugin & Extension System (PluginMetadata/PluginRecord/PluginExtensionType/PluginLifecycleState models + PluginRegistry + PluginManager facade with load/validate/initialize/unload lifecycle + version-compatibility validation + config/plugins.yaml + ADR-0012) |
+| Phase-15 | ✅ | v1.5.0 | Production Release (aeos CLI entry point + orchestrator/cli.py exposing existing facades only + LICENSE (MIT) + CHANGELOG.md + ADR-0013) |
 
 ---
 
@@ -36,11 +37,43 @@ Last Completed Phase: **Phase-14 – Plugin & Extension System**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-15 | ⏳ | Production Release (v1.0) |
+| _(none — Phase-15 was the final planned phase)_ | — | — |
 
 ---
 
 # Current Focus
+
+**Phase-15 has been implemented and verified** (`orchestrator/cli.py`:
+a single, dependency-free `argparse`-based module registered as the
+`aeos` console script via `[project.scripts]` in `pyproject.toml`
+(`orchestrator.cli:main`); exposes exactly three commands —
+`version`/`--version`, `list-agents`, and `help`/no-args — each a thin
+pass-through to the existing `AgentRegistry`/`Orchestrator` facades,
+introducing no new orchestration, execution, workflow, provider, tool,
+or plugin logic; `LICENSE` (MIT) and `CHANGELOG.md` added; ADR-0013).
+`get_version()` reads from installed package metadata
+(`importlib.metadata.version("aeos")`) so `pyproject.toml`'s
+`[project].version` stays the single source of truth. No completed
+phase's module, public API, or config schema was modified; 7 new tests
+added. Phase-15 was the final planned phase — see Milestones below.
+
+**Phase-15 – Production Release** objectives (all met):
+
+- Minimal `aeos` CLI entry point exposing only existing functionality
+  (version, command listing/help, loading the existing orchestrator).
+  ✅ (`orchestrator/cli.py`; ADR-0013 decision 1)
+- No new runtime capability: no new execution engine, workflow engine,
+  provider logic, or plugin logic. ✅ (ADR-0013 Context/Decision 1 —
+  every command is a pass-through to `AgentRegistry`/`Orchestrator`)
+- `[project.scripts]` console-script registration. ✅ (`pyproject.toml`;
+  ADR-0013 decision 2)
+- `LICENSE` (MIT) and `CHANGELOG.md` summarizing Phase-01 → Phase-15.
+  ✅ (ADR-0013 decision 3)
+- Preserve backward compatibility; do not redesign any completed
+  phase. ✅ (no file outside `orchestrator/cli.py`,
+  `tests/test_cli.py`, `pyproject.toml`, `PROJECT_ROADMAP.md`,
+  `CHANGELOG.md`, `LICENSE`, and this ADR was touched; ADR-0013
+  Consequences)
 
 **Phase-14 has been implemented and verified** (new
 `orchestrator/plugins/` package -- `PluginMetadata` / `PluginRecord` /
@@ -244,7 +277,7 @@ format clean, up from 499 at Phase-13 close. Phase-15 has not started.
 | Security | ✅ |
 | Observability | ✅ |
 | Plugin & Extension System | ✅ |
-| Production Ready | ⏳ |
+| Production Ready | ✅ |
 
 ---
 
@@ -263,6 +296,7 @@ format clean, up from 499 at Phase-13 close. Phase-15 has not started.
 | v1.2.0 | Stable Phase-12 |
 | v1.3.0 | Stable Phase-13 |
 | v1.4.0 | Stable Phase-14 |
+| v1.5.0 | Stable Phase-15 |
 
 ---
 
@@ -295,4 +329,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v1.4.0**
+Current Version: **v1.5.0**
