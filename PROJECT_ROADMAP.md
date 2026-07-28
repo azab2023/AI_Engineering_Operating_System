@@ -3,11 +3,11 @@
 
 **Project Status:** Active Development
 
-Current Version: **v1.3.0**
+Current Version: **v1.4.0**
 
-Current Branch: **phase-13**
+Current Branch: **phase-14**
 
-Last Completed Phase: **Phase-13 – Monitoring & Observability**
+Last Completed Phase: **Phase-14 – Plugin & Extension System**
 
 ---
 
@@ -28,6 +28,7 @@ Last Completed Phase: **Phase-13 – Monitoring & Observability**
 | Phase-11 | ✅ | v1.1.0 | Workflow Engine (WorkflowRegistry + WorkflowRunRepository + WorkflowEngine facade composing Orchestrator/ExecutionEngine + ToolExecutor + ADR-0009) |
 | Phase-12 | ✅ | v1.2.0 | Security & Permissions (PathSandboxPolicy + AgentPermission + PermissionRegistry + ToolAuthorizer + agent_name-aware ToolExecutor/WorkflowStep + ADR-0010) |
 | Phase-13 | ✅ | v1.3.0 | Monitoring & Observability (ObservabilityEvent/MetricPoint/ObservabilityConfig models + InMemoryRecorder + ObservabilityRegistry + ObservabilityManager facade + Observer pattern wired into Orchestrator/ExecutionEngine/ToolExecutor/WorkflowEngine + ADR-0011) |
+| Phase-14 | ✅ | v1.4.0 | Plugin & Extension System (PluginMetadata/PluginRecord/PluginExtensionType/PluginLifecycleState models + PluginRegistry + PluginManager facade with load/validate/initialize/unload lifecycle + version-compatibility validation + config/plugins.yaml + ADR-0012) |
 
 ---
 
@@ -35,35 +36,61 @@ Last Completed Phase: **Phase-13 – Monitoring & Observability**
 
 | Phase | Status | Description |
 |--------|--------|-------------|
-| Phase-14 | ⏳ | Plugin & Extension System |
 | Phase-15 | ⏳ | Production Release (v1.0) |
 
 ---
 
 # Current Focus
 
-**Phase-13 has been implemented and verified** (new
-`orchestrator/observability/` package -- `ObservabilityEvent` /
-`MetricPoint` / `ObservabilityConfig` models, `InMemoryRecorder`
-implementing the new `ObservabilityRecorder` Protocol,
-`ObservabilityRegistry` loading/validating the new
-`config/observability.yaml`, and `ObservabilityManager` as a
-query/record facade); three new exceptions under a new
-`ObservabilityError` base in `orchestrator/exceptions.py`; ADR-0011.
-`Orchestrator`, `ExecutionEngine`, `ToolExecutor`, and `WorkflowEngine`
-each gain one new, optional, backward-compatible `observer:
-ObservabilityRecorder | None = None` constructor parameter (the
-Observer pattern) -- when omitted, behavior is byte-for-byte identical
-to pre-Phase-13; when supplied, each component records the structured
-events, counters, and timers documented in ADR-0011 decision 5's
-table, with `ToolExecutor` reusing `ToolResult.duration_seconds`
-rather than re-measuring it. Storage is in-memory only this phase, by
-explicit decision -- no SQLite reuse, no exporters, no health-check
-endpoints, no dashboards. `AgentTask`, `AgentRegistry`,
-`ModelProviderRegistry`, `PromptManager`, `MemoryManager`, and
-`ToolAuthorizer` are all unchanged by this phase; 499 tests passing
-(42 new), Ruff check + format clean, up from 457 at Phase-12 close.
-Phase-14 has not started.
+**Phase-14 has been implemented and verified** (new
+`orchestrator/plugins/` package -- `PluginMetadata` / `PluginRecord` /
+`PluginExtensionType` / `PluginLifecycleState` models, `PluginRegistry`
+loading/validating the new `config/plugins.yaml`, and `PluginManager`
+as the lifecycle facade); eight new exceptions under a new
+`PluginError` base in `orchestrator/exceptions.py`; ADR-0012. A plugin
+is a thin, config-driven metadata record that activates/deactivates an
+already-registered `tool_name` (`config/tools.yaml`) or provider agent
+(`config/model_providers.yaml`) through an explicit four-stage
+lifecycle -- `load` -> `validate` -> `initialize` -> `unload` -- each a
+one-way transition guarded by `InvalidPluginStateTransitionError`.
+`validate()` checks AEOS version compatibility
+(`min_aeos_version`/`max_aeos_version`) via a minimal, dependency-free
+semver comparator, and confirms the plugin's `target_name` is an
+enabled entry in `ToolRegistry`/`ModelProviderRegistry` (read-only
+existence checks only). `PluginManager` never calls `Tool.execute()`,
+`ToolFactory.create()`, or any `ModelProvider` adapter, so it
+introduces no new execution path and cannot bypass `ToolAuthorizer`
+(Phase-12); it accepts the same optional `observer:
+ObservabilityRecorder | None = None` parameter as every other
+Phase-13-integrated component. `ToolFactory`, `ProviderFactory`,
+`WorkflowEngine`, and every other completed phase's registries are
+unchanged by this phase; 575 tests passing (76 new), Ruff check +
+format clean, up from 499 at Phase-13 close. Phase-15 has not started.
+
+**Phase-14 – Plugin & Extension System** objectives (all met):
+
+- Plugin metadata model, registry, and manager/facade, reusing the
+  existing models/registry/manager patterns. ✅ (`PluginMetadata`,
+  `PluginRegistry`, `PluginManager`; ADR-0012 decisions 2-4)
+- Config-driven loading via `config/plugins.yaml`; discovery limited to
+  project-managed entries only -- no external package installation, no
+  Python `entry_points`. ✅ (`PluginRegistry`; ADR-0012 decision 3,
+  Alternatives Considered)
+- Four-stage lifecycle: load, validate, initialize, unload. ✅
+  (`PluginManager`; ADR-0012 decision 4)
+- Version-compatibility validation against the running AEOS version. ✅
+  (`min_aeos_version`/`max_aeos_version`, `CURRENT_AEOS_VERSION`;
+  ADR-0012 decision 6)
+- Integrate with Security (Phase-12) and Observability (Phase-13)
+  without bypassing either; no new execution path. ✅ (read-only
+  `ToolRegistry`/`ModelProviderRegistry` checks only, no
+  `Tool.execute()` call site; optional `observer` parameter; ADR-0012
+  decision 5)
+- Do not redesign `ToolFactory`, `ProviderFactory`, `WorkflowEngine`,
+  or any existing registry; keep the implementation minimal and fully
+  backward compatible. ✅ (`orchestrator/plugins/` is new and
+  additive; all 499 pre-Phase-14 tests remain valid unmodified;
+  ADR-0012 Consequences)
 
 **Phase-13 – Monitoring & Observability** objectives (all met):
 
@@ -216,6 +243,7 @@ Phase-14 has not started.
 | Workflow Engine | ✅ |
 | Security | ✅ |
 | Observability | ✅ |
+| Plugin & Extension System | ✅ |
 | Production Ready | ⏳ |
 
 ---
@@ -234,6 +262,7 @@ Phase-14 has not started.
 | v1.1.0 | Stable Phase-11 |
 | v1.2.0 | Stable Phase-12 |
 | v1.3.0 | Stable Phase-13 |
+| v1.4.0 | Stable Phase-14 |
 
 ---
 
@@ -266,4 +295,4 @@ For every phase:
 
 Project: **AI Engineering Operating System (AEOS)**
 Repository Status: **Active**
-Current Version: **v1.3.0**
+Current Version: **v1.4.0**

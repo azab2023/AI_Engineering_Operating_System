@@ -1,0 +1,71 @@
+# Plugin Configuration — Phase-14 (Plugin & Extension System)
+#
+# Each top-level key under `plugins` is a plugin_name that PluginManager
+# / PluginRegistry resolve at lookup time. This is additive: it does not
+# modify tools.yaml, model_providers.yaml, or any other config, and
+# nothing outside the new orchestrator/plugins/ package depends on this
+# file existing (mirrors ADR-0007 decision 6's precedent for tools.yaml).
+#
+# A plugin never introduces a new Tool/ModelProvider implementation of
+# its own -- it only activates an *already-registered*, already-enabled
+# tool_name (tools.yaml) or provider agent (model_providers.yaml). See
+# ADR-0012 decision 5.
+#
+# Field reference:
+#   version           - the plugin's own version (MAJOR.MINOR.PATCH),
+#                        documentation/identification only.
+#   description        - human-readable purpose, documentation only.
+#   enabled              - true|false. A disabled entry is treated as a
+#                          configuration error (PluginDisabledError) at
+#                          PluginManager.load() time.
+#   extension_type        - "tool" | "provider" -- which existing
+#                            extension point this plugin activates.
+#   target_name             - the tool_name (tools.yaml) or agent name
+#                              (model_providers.yaml) this plugin
+#                              activates, depending on extension_type.
+#                              PluginManager.validate() checks this
+#                              target is an enabled entry in the
+#                              corresponding registry.
+#   min_aeos_version          - minimum AEOS version (MAJOR.MINOR.PATCH)
+#                                this plugin is compatible with.
+#   max_aeos_version            - maximum AEOS version this plugin is
+#                                  compatible with. Optional, defaults
+#                                  to null (no upper bound).
+
+plugins:
+
+  read_file_plugin:
+    version: "1.0.0"
+    description: "Activates the built-in read_file tool as a managed plugin."
+    enabled: true
+    extension_type: tool
+    target_name: read_file
+    min_aeos_version: "1.3.0"
+    max_aeos_version: null
+
+  list_directory_plugin:
+    version: "1.0.0"
+    description: "Activates the built-in list_directory tool as a managed plugin."
+    enabled: true
+    extension_type: tool
+    target_name: list_directory
+    min_aeos_version: "1.3.0"
+    max_aeos_version: null
+
+  claude_code_provider_plugin:
+    version: "1.0.0"
+    description: "Activates the claude_code Anthropic model provider as a managed plugin."
+    enabled: true
+    extension_type: provider
+    target_name: claude_code
+    min_aeos_version: "1.4.0"
+    max_aeos_version: null
+
+  aider_provider_plugin:
+    version: "1.0.0"
+    description: "Managed plugin for the aider OpenAI model provider (currently disabled upstream)."
+    enabled: false
+    extension_type: provider
+    target_name: aider
+    min_aeos_version: "1.4.0"
+    max_aeos_version: null

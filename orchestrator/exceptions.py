@@ -644,3 +644,111 @@ class InvalidMetricTypeError(ObservabilityError):
             f"Metric {metric_name!r} has unsupported metric_type={metric_type!r}; "
             "expected 'counter' or 'timer'"
         )
+
+
+class PluginError(OrchestratorError):
+    """Base class for all Phase-14 plugin-and-extension-system errors.
+
+    Distinct from every other hierarchy above: these originate from
+    ``orchestrator.plugins`` -- config-loading, lifecycle-state
+    tracking, and version/target validation for a plugin -- not from
+    any agent-invocation, tool, or workflow path. ``PluginManager``
+    never calls ``Tool.execute()``, ``ToolFactory.create()``, or any
+    ``ModelProvider`` adapter; see ADR-0012 decision 5.
+    """
+
+
+class PluginRegistryError(PluginError):
+    """Raised when ``config/plugins.yaml`` cannot be loaded or fails
+    validation. Mirrors ``ToolRegistryError`` (Phase-09)."""
+
+
+class PluginNotFoundError(PluginError):
+    """Raised when a requested ``plugin_name`` has no entry in the
+    plugin registry. Mirrors ``ToolNotFoundError`` (Phase-09)."""
+
+    def __init__(self, plugin_name: str):
+        self.plugin_name = plugin_name
+        super().__init__(f"No plugin found with name={plugin_name!r}")
+
+
+class PluginDisabledError(PluginError):
+    """Raised when the entry for ``plugin_name`` in
+    ``config/plugins.yaml`` has ``enabled: false``. A configuration
+    state, not a transient failure -- mirrors ``ToolDisabledError``
+    (Phase-09)."""
+
+    def __init__(self, plugin_name: str):
+        self.plugin_name = plugin_name
+        super().__init__(f"Plugin {plugin_name!r} is disabled")
+
+
+class PluginAlreadyLoadedError(PluginError):
+    """Raised by ``PluginManager.load()`` when a ``PluginRecord``
+    already exists for ``plugin_name``. ``load()`` is not idempotent --
+    mirrors ``ExecutionAlreadyExistsError`` (Phase-05)."""
+
+    def __init__(self, plugin_name: str):
+        self.plugin_name = plugin_name
+        super().__init__(f"Plugin {plugin_name!r} is already loaded")
+
+
+class UnknownPluginRecordError(PluginError):
+    """Raised when ``PluginManager.validate()``/``initialize()``/
+    ``unload()``/``get()`` is called for a ``plugin_name`` that has not
+    been ``load()``-ed yet. Mirrors ``UnknownWorkflowRunError``
+    (Phase-11)."""
+
+    def __init__(self, plugin_name: str):
+        self.plugin_name = plugin_name
+        super().__init__(f"No plugin record found for plugin_name={plugin_name!r}")
+
+
+class InvalidPluginStateTransitionError(PluginError):
+    """Raised when a ``PluginManager`` lifecycle method is called on a
+    plugin whose current state does not permit that action. Mirrors
+    ``InvalidWorkflowStateTransitionError`` (Phase-11)."""
+
+    def __init__(self, plugin_name: str, action: str, expected_state: str, actual_state: str):
+        self.plugin_name = plugin_name
+        self.action = action
+        self.expected_state = expected_state
+        self.actual_state = actual_state
+        super().__init__(
+            f"Cannot {action} plugin {plugin_name!r}: requires state "
+            f"{expected_state!r}, but current state is {actual_state!r}"
+        )
+
+
+class PluginVersionIncompatibleError(PluginError):
+    """Raised by ``PluginManager.validate()`` when the running AEOS
+    version does not satisfy the plugin's declared
+    ``min_aeos_version``/``max_aeos_version`` range."""
+
+    def __init__(self, plugin_name: str, current_version: str, minimum: str, maximum: str | None):
+        self.plugin_name = plugin_name
+        self.current_version = current_version
+        self.minimum = minimum
+        self.maximum = maximum
+        range_desc = f">={minimum}" + (f", <={maximum}" if maximum is not None else "")
+        super().__init__(
+            f"Plugin {plugin_name!r} requires AEOS version {range_desc}, "
+            f"but the running version is {current_version!r}"
+        )
+
+
+class PluginTargetNotFoundError(PluginError):
+    """Raised by ``PluginManager.validate()`` when a plugin's
+    ``target_name`` has no enabled entry in the registry its
+    ``extension_type`` points at (``ToolRegistry`` for ``tool``,
+    ``ModelProviderRegistry`` for ``provider``)."""
+
+    def __init__(self, plugin_name: str, extension_type: str, target_name: str):
+        self.plugin_name = plugin_name
+        self.extension_type = extension_type
+        self.target_name = target_name
+        super().__init__(
+            f"Plugin {plugin_name!r} references {extension_type!r} target "
+            f"{target_name!r}, which is not an enabled entry in the "
+            f"corresponding registry"
+        )
